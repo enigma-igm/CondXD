@@ -19,7 +19,7 @@ from IPython import embed
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 # read file
-file = fits.open('../../../4Master/Research1/VIKING_catalog.fits')
+file = fits.open('../../4Master/Research1/VIKING_catalog.fits')
 data = copy.deepcopy(file[1].data)
 file.close()
 

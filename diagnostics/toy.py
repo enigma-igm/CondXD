@@ -1,4 +1,4 @@
-from GMMNet.data.toy import noise_func
+from data.toy import noise_func
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D

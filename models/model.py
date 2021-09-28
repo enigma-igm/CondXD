@@ -115,7 +115,7 @@ class GMMNet(nn.Module):
             noise = noise[:, None, ...]  # add noise to all components
 
         noisy_covars = covars + noise
-        embed()
+        
         log_resp = mvn(loc=means, covariance_matrix=noisy_covars).log_prob(data[:, None, :])
         
         log_resp += torch.log(weights)
