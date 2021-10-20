@@ -75,7 +75,7 @@ class GMMNet(nn.Module):
         
         # calculate means
         means = self.means_network(embedding)
-        means = means.reshape(-1, self.n_components, self.data_dim) + self.cluster_centroids
+        means = means.reshape(-1, self.n_components, self.data_dim)# + self.cluster_centroids
         
         # calculate cholesky matrix
         covars_ele = self.covar_network(embedding)
@@ -89,8 +89,10 @@ class GMMNet(nn.Module):
         scale_tril[:, :, l_idx[0], l_idx[1]] = lower_tri
         
         # calculate covariance matrix
-        covars = torch.matmul(scale_tril, scale_tril.transpose(-2, -1))
-
+        # do we need to add the 2nd term???
+        covars = torch.matmul(scale_tril, scale_tril.transpose(-2, -1)) + torch.eye(self.data_dim)*1e-4
+        
+        #print(True in (covars.symeig(eigenvectors=False)[0]<0))
         return weights, means, covars
 
 
@@ -98,7 +100,7 @@ class GMMNet(nn.Module):
         '''
         regression loss.
         '''
-        l = self.w / torch.diagonal(covars, dim1=-1, dim2=-2)
+        l = self.w * (1/torch.abs(torch.linalg.eigvals(covars)))#1/torch.diagonal(covars, dim1=-1, dim2=-2)#
         return l.sum(axis=(-1,-2))
     
     
@@ -115,6 +117,8 @@ class GMMNet(nn.Module):
             noise = noise[:, None, ...]  # add noise to all components
 
         noisy_covars = covars + noise
+        #print('After', self.reg_loss(noisy_covars))
+        #noisy_tril = torch.linalg.cholesky(noisy_covars)
         
         log_resp = mvn(loc=means, covariance_matrix=noisy_covars).log_prob(data[:, None, :])
         
@@ -128,7 +132,10 @@ class GMMNet(nn.Module):
     def fit(self, data, conditional, noise=None, regression=False):
 
         weights, means, covars = self.forward(conditional)
-
+        #bln = torch.isinf(self.reg_loss(covars))
+        #print(conditional[bln])
+        #if bln.sum() > 0:
+        #    embed()
         log_prob_b = self.log_prob_b(data, weights, means, covars, noise)
         
         if regression is False:
@@ -167,6 +174,22 @@ class GMMNet(nn.Module):
 
 
 
-
+'''
 #github copilot
+ok = mvn.arg_constraints['covariance_matrix'].check(noisy_covars) 
+bad_elements = noisy_covars[~ok[0]]
+print(bad_elements)
+
+flattened_covs = sth.reshape(-1, 8, 8)
+torch.stack([v.symeig(eigenvectors=False)[0][:1] > 0.0 for v in flattened_covs]).view((8,8))
+
+for i in range(120):
+    conddd = torch.Tensor([i])
+    weightss, meanss, covarss = self.forward(conddd[None,:])
+    print(i)
+    print(self.reg_loss(covarss))
+
+bln = torch.isinf(self.reg_loss(covars))
+print(conditional[bln])
+'''
         
