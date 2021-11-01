@@ -91,14 +91,13 @@ def all_figures(K,
     # sampling from trained model with noise
     output_tes = torch.Tensor([])
     for i, (f_J_i, _, err_r_i) in enumerate(train_loader_tes):
-        f_J_i = torch.log(f_J_i)
         output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1, err_r_i).squeeze()))
     output_tes = output_tes.reshape(-1, D).numpy()
         
     # the corner plot of the relative fluxes
     name = f'd_K{K:d}'
     cornerplots(data_tes, output_tes, labels, bins, ranges, '', name, noisy=True)
-
+    
     # the corner plot of the relative fluxes in each J band flux bin
     for i in range(Jbin_len):
         bln = (torch.exp(f_J_tes)>=Jbin_l[i]) & (torch.exp(f_J_tes)<Jbin_r[i])
@@ -113,21 +112,19 @@ def all_figures(K,
     save_name = f'noisy_relative_f_d_K{K:d}'
     make_gif(Jbin_len, K, tag, save_name)
     plt.close()
-
+    
 
 
     # sampling from trained model without noise
     output_tes = torch.Tensor([])
     for i, (f_J_i, _, _) in enumerate(train_loader_tes):
-        f_J_i = torch.log(f_J_i)
         output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1).squeeze()))
     output_tes = output_tes.reshape(-1, D).numpy()
 
     # the corner plot of the relative fluxes
     name = f'd_K{K:d}'
     cornerplots(data_tes, output_tes, labels, bins, ranges, '', name, noisy=False)
-
-
+    
     # the corner plot of the relative fluxes
     name = f'd_K{K:d}'
     cornerplots(data_tes, output_tes, labels, bins, ranges, '', name, noisy=False)
@@ -145,7 +142,7 @@ def all_figures(K,
     save_name = f'clean_relative_f_d_K{K:d}'
     make_gif(Jbin_len, K, tag, save_name)
     plt.close()
-
+    
     plt.show()
 
 

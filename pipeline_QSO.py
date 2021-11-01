@@ -39,7 +39,8 @@ rf_w1 = data['f_w1'] / data['f_J']
 rf_w2 = data['f_w2'] / data['f_J']
 data_set = torch.Tensor(np.array([rf_z, rf_Y, rf_H, rf_Ks, rf_w1, rf_w2]))
 data_set = data_set.transpose(1, 0)
-
+#print('Check data_set transposed correctly.')
+#embed()
 
 # load errors
 f_z_err = data['f_z_err']
@@ -52,18 +53,18 @@ err_set  = torch.Tensor(np.array([f_z_err, f_Y_err, f_H_err, f_Ks_err, f_w1_err,
 err_set  = err_set.transpose(1, 0)
 
 del data
-
+'''
 # test: a narrow J band flux bin
 bln = ((f_J>=1) & (f_J<=1.5)).flatten()
 f_J = f_J[bln]
 f_J_err = f_J_err[bln]
 data_set = data_set[bln]
 err_set = err_set[bln]
-
+'''
 # setup parameter: length of data and data dimension
 len_data, D = data_set.shape
 # Gaussian components
-K = 20
+K = 25
 # size of training / validation /test set
 size_tra = 80
 size_val = 5
@@ -80,8 +81,8 @@ err_r_set = err_r_set + err_r_set.transpose(2, 1)
 # diagonal element
 for i in range(D):
     err_r_set[:,i,i] = 1/f_J[:,0]**2 * err_set[:,i]**2 + data_set[:,i]**2 / f_J[:,0]**2 * f_J_err[:,0]**2
-
-
+#print('Check err_r_set setup correctly.')
+#embed()
 f_J_err = f_J_err/f_J
 f_J = torch.log(f_J)
 #f_J_err = f_J_err/f_J.std()
@@ -93,7 +94,7 @@ def real_size(size_tra, size_val, size_tes, len_data):
     real_size_tra = np.round(len_data*size_tra/sum_size).astype('int')
     real_size_val = np.round(len_data*size_val/sum_size).astype('int')
     real_size_tes = np.round(len_data*size_tes/sum_size).astype('int')
-    if (real_size_tra+real_size_val+real_size_tes !=len_data ):
+    if (real_size_tra+real_size_val+real_size_tes !=len_data):
         delta = (real_size_tra+real_size_val+real_size_tes - len_data).astype('int')
         real_size_tes -= delta
     return (real_size_tra, real_size_val, real_size_tes)
@@ -106,6 +107,8 @@ size_tra, size_val, size_tes = real_size(size_tra, size_val, size_tes, len_data)
 id_sep = np.append(np.ones(size_tra), np.append(np.ones(size_val)*2, np.ones(size_tes)*3)).astype('int')
 np.random.seed()
 np.random.shuffle(id_sep)
+#print('check id_sep.')
+#embed()
 f_J_tra, f_J_err_tra = get_set(f_J, f_J_err, id_sep, 1)
 f_J_val, f_J_err_val = get_set(f_J, f_J_err, id_sep, 2)
 f_J_tes, f_J_err_tes = get_set(f_J, f_J_err, id_sep, 3)
@@ -188,7 +191,7 @@ for n in range(epoch):
         if val_loss < lowest_loss:
             lowest_loss = val_loss
             best_model  = copy.deepcopy(gmm)
-            torch.save(gmm.state_dict(),
+            torch.save(best_model.state_dict(),
                 f'params/params_d_K{K:d}.pkl')
 
 

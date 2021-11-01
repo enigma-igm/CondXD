@@ -142,7 +142,6 @@ data_tes = train_loader_tes.dataset.tensors[1].numpy()
 # sampling from trained model with noise
 output_tes = torch.Tensor([])
 for i, (f_J_i, _, err_r_i) in enumerate(train_loader_tes):
-    f_J_i = torch.log(f_J_i)
     output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1, err_r_i).squeeze()))
 output_tes = output_tes.reshape(-1, D).numpy()
     
@@ -168,7 +167,6 @@ plt.close()
 # sampling from trained model without noise
 output_tes = torch.Tensor([])
 for i, (f_J_i, _, _) in enumerate(train_loader_tes):
-    f_J_i = torch.log(f_J_i)
     output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1).squeeze()))
 output_tes = output_tes.reshape(-1, D).numpy()
 
