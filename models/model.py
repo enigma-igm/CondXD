@@ -100,7 +100,7 @@ class GMMNet(nn.Module):
         '''
         regression loss.
         '''
-        l = self.w * (1/torch.abs(torch.linalg.eigvals(covars)))#1/torch.diagonal(covars, dim1=-1, dim2=-2)#
+        l = self.w * 1/torch.diagonal(covars, dim1=-1, dim2=-2)#(1/torch.abs(torch.linalg.eigvals(covars)))#
         return l.sum(axis=(-1,-2))
     
     
@@ -132,10 +132,10 @@ class GMMNet(nn.Module):
     def fit(self, data, conditional, noise=None, regression=False):
 
         weights, means, covars = self.forward(conditional)
-        #bln = torch.isinf(self.reg_loss(covars))
-        #print(conditional[bln])
-        #if bln.sum() > 0:
-        #    embed()
+        #ok = mvn.arg_constraints['loc'].check(means) 
+        #bad_elements = means[~ok]
+        #print(bad_elements)
+        #print(conditional[~ok])
         log_prob_b = self.log_prob_b(data, weights, means, covars, noise)
         
         if regression is False:
@@ -176,9 +176,9 @@ class GMMNet(nn.Module):
 
 '''
 #github copilot
-ok = mvn.arg_constraints['covariance_matrix'].check(noisy_covars) 
+ok = mvn.arg_constraints['loc'].check(means) 
 bad_elements = noisy_covars[~ok[0]]
-print(bad_elements)
+print(means)
 
 flattened_covs = sth.reshape(-1, 8, 8)
 torch.stack([v.symeig(eigenvectors=False)[0][:1] > 0.0 for v in flattened_covs]).view((8,8))

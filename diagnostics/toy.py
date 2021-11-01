@@ -5,10 +5,12 @@ from matplotlib.collections import LineCollection
 import numpy as np
 import torch
 import corner
+import imageio
+
 
 from models.model import mvn
 
-def cornerplots(data_tes, output_tes, labels, bins, ranges, K, noisy=False):
+def cornerplots(data_tes, output_tes, labels, bins, ranges, anno, name, noisy=False):
     """Making comparison corner plots of the test set.
 
     Args:
@@ -17,10 +19,10 @@ def cornerplots(data_tes, output_tes, labels, bins, ranges, K, noisy=False):
         labels (list): labels of each band (dimension).
         bins (int): the bins of the 2Dhist.
         ranges (list, shape nx2): the ranges of each band for plotting.
-        K (int): the number of Gaussian components
+        anno (string): annotation of the plot.
+        name (string): the specific name of the plot of relative fluxes.
         noisy (bool, optional): if the output data are samples from NN with noise. Defaults to False.
     """
-    import corner
     fig = corner.corner(data_tes, labels=labels, label_kwargs={"fontsize": 20}, bins=bins, range=ranges)
     corner.corner(output_tes, fig=fig, color='tab:blue', labels=labels, label_kwargs={"fontsize": 20}, bins=bins, range=ranges)
     axes = np.array(fig.axes).reshape((data_tes.shape[-1], data_tes.shape[-1]))
@@ -28,7 +30,7 @@ def cornerplots(data_tes, output_tes, labels, bins, ranges, K, noisy=False):
         ax.tick_params(axis='both', which='major', direction='in', length=5, labelsize=15, width=2)
         ax.xaxis.set_ticks_position('both')
         ax.yaxis.set_ticks_position('both')
-    axes[0, -3].text(0.6, 0.4, f'Relative Flux', c='k',
+    axes[0, -3].text(0.6, 0.4, f'Relative Flux\n{anno}', c='k',
                 fontsize=20, horizontalalignment='center', weight='bold')
     axes[1, -3].text(0.6, 1.0, f'Test Set', c='k',
                 fontsize=20, horizontalalignment='center', weight='bold')
@@ -42,8 +44,18 @@ def cornerplots(data_tes, output_tes, labels, bins, ranges, K, noisy=False):
         tag = 'clean'
     if noisy is True:
         tag = 'noisy'
-    fig.savefig(f'figs/{tag}_relative_flux_K{K}.pdf')
-    plt.show()
+    fig.savefig(f'figs/{tag}_relative_flux_'+name+'.png')
+    
+
+
+def make_gif(Jbin_len,K,tag,save_name):
+    # Create a gif of the relative flux contours
+    import imageio
+    folder='figs/'
+    files = [folder+f'{tag}_relative_flux_d_J{i:d}_K{K:d}.png'
+                 for i in range(Jbin_len)]
+    images = [imageio.imread(file) for file in files]
+    imageio.mimwrite(folder+save_name+'.gif', images, fps=1.5)
 
 
 
@@ -60,8 +72,19 @@ def all_figures(K,
         train_loader_tes (pytorch dataloader): The test set.
         gmm (class): Neural network for Gaussian Mixture Model. See model/model.py
     """
+
+    # parameters for plotting
+    bins=50
+    labels = ['$f_z$','$f_Y$', '$f_H$','$f_{Ks}$','$f_{W1}$','$f_{W2}$']
+    ranges = [(-0.5,1.),(-0.7,1.4),(-1.2,3.1),(-1.6,5.),(-2.5,8.3),(-4,12)]
+    # parameters of plots in J band flux bins
+    Jbin_len = 5
+    Jbin_l = torch.linspace(1, 5, Jbin_len)
+    Jbin_r = Jbin_l + 4/(Jbin_len-1)
+    Jbin_r[-1] = 999
     
     #All figures to show the performances of our network.
+    f_J_tes = train_loader_tes.dataset.tensors[0]
     data_tes = train_loader_tes.dataset.tensors[1].numpy()
 
 
@@ -73,10 +96,23 @@ def all_figures(K,
     output_tes = output_tes.reshape(-1, D).numpy()
         
     # the corner plot of the relative fluxes
-    bins=50
-    labels = ['$f_z$','$f_Y$', '$f_H$','$f_{Ks}$','$f_{W1}$','$f_{W2}$']
-    ranges = [(-0.5,1.),(-0.7,1.4),(-1.2,3.1),(-1.6,5.),(-2.5,8.3),(-4,12)]
-    cornerplots(data_tes, output_tes, labels, bins, ranges, K, noisy=False)
+    name = f'd_K{K:d}'
+    cornerplots(data_tes, output_tes, labels, bins, ranges, '', name, noisy=True)
+
+    # the corner plot of the relative fluxes in each J band flux bin
+    for i in range(Jbin_len):
+        bln = (torch.exp(f_J_tes)>=Jbin_l[i]) & (torch.exp(f_J_tes)<Jbin_r[i])
+        bln = bln.numpy().flatten()
+        data_tes_i = data_tes[bln]
+        output_tes_i = output_tes[bln]
+        anno = f'{Jbin_l[i]:.1f}<$f_J$<{Jbin_r[i]:.1f}'
+        name = f'd_J{i:d}_K{K:d}'
+        cornerplots(data_tes_i, output_tes_i, labels, bins, ranges, anno, name, noisy=True)
+
+    tag='noisy'
+    save_name = f'noisy_relative_f_d_K{K:d}'
+    make_gif(Jbin_len, K, tag, save_name)
+    plt.close()
 
 
 
@@ -86,22 +122,31 @@ def all_figures(K,
         f_J_i = torch.log(f_J_i)
         output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1).squeeze()))
     output_tes = output_tes.reshape(-1, D).numpy()
-    
+
     # the corner plot of the relative fluxes
-    bins=50
-    labels = ['$f_z$','$f_Y$', '$f_H$','$f_{Ks}$','$f_{W1}$','$f_{W2}$']
-    ranges = [(-0.5,1.),(-0.7,1.4),(-1.2,3.1),(-1.6,5.),(-2.5,8.3),(-4,12)]
-    cornerplots(data_tes, output_tes, labels, bins, ranges, K, noisy=True)
+    name = f'd_K{K:d}'
+    cornerplots(data_tes, output_tes, labels, bins, ranges, '', name, noisy=False)
+
+
+    # the corner plot of the relative fluxes
+    name = f'd_K{K:d}'
+    cornerplots(data_tes, output_tes, labels, bins, ranges, '', name, noisy=False)
+    # the corner plot of the relative fluxes in each J band flux bin
+    for i in range(Jbin_len):
+        bln = (torch.exp(f_J_tes)>=Jbin_l[i]) & (torch.exp(f_J_tes)<Jbin_r[i])
+        bln = bln.numpy().flatten()
+        data_tes_i = data_tes[bln]
+        output_tes_i = output_tes[bln]
+        anno = f'{Jbin_l[i]:.1f}<$f_J$<{Jbin_r[i]:.1f}'
+        name = f'd_J{i:d}_K{K:d}'
+        cornerplots(data_tes_i, output_tes_i, labels, bins, ranges, anno, name, noisy=False)
+
+    tag='clean'
+    save_name = f'clean_relative_f_d_K{K:d}'
+    make_gif(Jbin_len, K, tag, save_name)
+    plt.close()
+
+    plt.show()
 
 
 
-    '''
-    fig, ax = plt.subplots()
-    pd_t = ax.scatter(*data_tes_plot[:,0:2].transpose(), marker='.', color='grey', alpha=0.5, label='Training Set')
-    pd_k = ax.scatter(*means0_t[:,0:2].transpose(), s=80, marker='.', color='tab:orange', label='kmeans centroids')
-    ax.set_title('Training Set', fontsize=14)
-    ax.set_xlabel('Dimension 1')
-    ax.set_ylabel('Dimension 2')
-    ax.legend(fontsize=14)
-    fig.savefig('figs/trainingset.pdf')
-    '''
