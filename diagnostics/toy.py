@@ -83,15 +83,18 @@ def all_figures(K,
     Jbin_r = Jbin_l + 4/(Jbin_len-1)
     Jbin_r[-1] = 999
     
+    
     #All figures to show the performances of our network.
-    f_J_tes = train_loader_tes.dataset.tensors[0]
-    data_tes = train_loader_tes.dataset.tensors[1].numpy()
-
 
     # sampling from trained model with noise
+    f_J_tes = torch.Tensor([])
+    data_tes = torch.Tensor([]) 
     output_tes = torch.Tensor([])
-    for i, (f_J_i, _, err_r_i) in enumerate(train_loader_tes):
-        output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1, err_r_i).squeeze()))
+    for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader_tes):
+        f_J_tes = torch.cat((f_J_tes, f_J_i))
+        data_tes = torch.cat((data_tes, data_i))
+        output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1, err_r_i)))
+    data_tes = data_tes.numpy()
     output_tes = output_tes.reshape(-1, D).numpy()
         
     # the corner plot of the relative fluxes
@@ -115,10 +118,16 @@ def all_figures(K,
     
 
 
+    # shuffle the test set
+    f_J_tes = torch.Tensor([])
+    data_tes = torch.Tensor([])
     # sampling from trained model without noise
     output_tes = torch.Tensor([])
-    for i, (f_J_i, _, _) in enumerate(train_loader_tes):
-        output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1).squeeze()))
+    for i, (f_J_i, data_i, _) in enumerate(train_loader_tes):
+        f_J_tes = torch.cat((f_J_tes, f_J_i))
+        data_tes = torch.cat((data_tes, data_i))
+        output_tes = torch.cat((output_tes, gmm.sample(f_J_i, 1)))
+    data_tes = data_tes.numpy()
     output_tes = output_tes.reshape(-1, D).numpy()
 
     # the corner plot of the relative fluxes
