@@ -58,17 +58,18 @@ len_data, D = data_set.shape
 # Gaussian components
 K = 20
 # size of training / validation /test set
-size_tra = 80
-size_val = 5
-size_tes = 15
+size_tra = 0
+size_val = 0
+size_tes = 100
 
 
 # new covariance matrix
 err_r_set = torch.zeros((len_data, D, D))
 # off-diagonal element
+high_SN_bln = ((22.5 - 2.5*torch.log10(f_J)) <= 21).flatten()
 for i in range(1, D):
     for j in range(i):
-        err_r_set[:,i,j] = data_set[:,i] * data_set[:,j] / f_J[:,0]**2 * f_J_err[:,0]**2
+        err_r_set[high_SN_bln,i,j] = (data_set[:,i] * data_set[:,j] / f_J[:,0]**2 * f_J_err[:,0]**2)[high_SN_bln]
 err_r_set = err_r_set + err_r_set.transpose(2, 1)
 # diagonal element
 for i in range(D):
@@ -103,7 +104,7 @@ del data_set, err_set
 
 # put data into batches
 batch_size = 500
-train_loader_tes = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size, shuffle=True)
+train_loader_tes = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size)
 
 # kmeans to classify each data point. The means0 serves as the origin of the means.
 kmeans_t = KMeans(n_clusters=K, random_state=0).fit(data_tes.numpy())
@@ -124,19 +125,12 @@ for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader_tes):
 tes_loss = tes_loss / size_tes
 print('\nTest loss:', tes_loss)
 
-
-# parameters for plotting
-bins=50
-labels = ['$f_z$','$f_Y$', '$f_H$','$f_{Ks}$','$f_{W1}$','$f_{W2}$']
-ranges = [(-0.5,1.),(-0.7,1.4),(-1.2,3.1),(-1.6,5.),(-2.5,8.3),(-4,12)]
-# parameters of plots in J band flux bins
-Jbin_len = 5
-Jbin_l = torch.linspace(1, 5, Jbin_len)
-Jbin_r = Jbin_l + 4/(Jbin_len-1)
-Jbin_r[-1] = 999
+embed()
 
 
-#all_figures(K, D, train_loader_tes, gmm)
+all_figures(K, D, train_loader_tes, gmm)
+
+"""
 #All figures to show the performances of our network.
 
 # sampling from trained model with noise
@@ -202,4 +196,5 @@ make_gif(Jbin_len, K, tag, save_name)
 plt.close()
 
 embed()
+"""
 

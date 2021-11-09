@@ -39,8 +39,7 @@ rf_w1 = data['f_w1'] / data['f_J']
 rf_w2 = data['f_w2'] / data['f_J']
 data_set = torch.Tensor(np.array([rf_z, rf_Y, rf_H, rf_Ks, rf_w1, rf_w2]))
 data_set = data_set.transpose(1, 0)
-#print('Check data_set transposed correctly.')
-#embed()
+
 
 # load errors
 f_z_err = data['f_z_err']
@@ -64,8 +63,8 @@ err_set = err_set[bln]
 # setup parameter: length of data and data dimension
 len_data, D = data_set.shape
 # Gaussian components
-K = 25
-# size of training / validation /test set
+K = 20
+# size of training / validation / test set
 size_tra = 80
 size_val = 5
 size_tes = 15
@@ -74,15 +73,15 @@ size_tes = 15
 # new covariance matrix
 err_r_set = torch.zeros((len_data, D, D))
 # off-diagonal element
+high_SN_bln = ((22.5 - 2.5*torch.log10(f_J)) <= 21).flatten()
 for i in range(1, D):
     for j in range(i):
-        err_r_set[:,i,j] = data_set[:,i] * data_set[:,j] / f_J[:,0]**2 * f_J_err[:,0]**2
+        err_r_set[high_SN_bln,i,j] = (data_set[:,i] * data_set[:,j] / f_J[:,0]**2 * f_J_err[:,0]**2)[high_SN_bln]
 err_r_set = err_r_set + err_r_set.transpose(2, 1)
 # diagonal element
 for i in range(D):
     err_r_set[:,i,i] = 1/f_J[:,0]**2 * err_set[:,i]**2 + data_set[:,i]**2 / f_J[:,0]**2 * f_J_err[:,0]**2
-#print('Check err_r_set setup correctly.')
-#embed()
+
 f_J_err = f_J_err/f_J
 f_J = torch.log(f_J)
 #f_J_err = f_J_err/f_J.std()
@@ -107,8 +106,7 @@ size_tra, size_val, size_tes = real_size(size_tra, size_val, size_tes, len_data)
 id_sep = np.append(np.ones(size_tra), np.append(np.ones(size_val)*2, np.ones(size_tes)*3)).astype('int')
 np.random.seed()
 np.random.shuffle(id_sep)
-#print('check id_sep.')
-#embed()
+
 f_J_tra, f_J_err_tra = get_set(f_J, f_J_err, id_sep, 1)
 f_J_val, f_J_err_val = get_set(f_J, f_J_err, id_sep, 2)
 f_J_tes, f_J_err_tes = get_set(f_J, f_J_err, id_sep, 3)
@@ -134,8 +132,8 @@ del data_set, err_set
 # put data into batches
 batch_size = 500
 train_loader_tra = DataLoader(TensorDataset(f_J_tra, data_tra, err_r_tra), batch_size=batch_size, shuffle=True)
-train_loader_val = DataLoader(TensorDataset(f_J_val, data_val, err_r_val), batch_size=batch_size, shuffle=True)
-train_loader_tes = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size, shuffle=True)
+train_loader_val = DataLoader(TensorDataset(f_J_val, data_val, err_r_val), batch_size=batch_size)
+train_loader_tes = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size)
 
 
 # kmeans to classify each data point. The means0 serves as the origin of the means.

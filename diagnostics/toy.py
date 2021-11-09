@@ -2,10 +2,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.collections import LineCollection
+from astropy.io import fits
 import numpy as np
 import torch
 import corner
 import imageio
+import copy
 
 
 from models.model import mvn
@@ -23,14 +25,14 @@ def cornerplots(data_tes, output_tes, labels, bins, ranges, anno, name, noisy=Fa
         name (string): the specific name of the plot of relative fluxes.
         noisy (bool, optional): if the output data are samples from NN with noise. Defaults to False.
     """
-    fig = corner.corner(data_tes, labels=labels, label_kwargs={"fontsize": 20}, bins=bins, range=ranges)
-    corner.corner(output_tes, fig=fig, color='tab:blue', labels=labels, label_kwargs={"fontsize": 20}, bins=bins, range=ranges)
+    fig = corner.corner(data_tes, labels=labels, label_kwargs={"fontsize": 25}, bins=bins, range=ranges)
+    corner.corner(output_tes, fig=fig, color='r', labels=labels, label_kwargs={"fontsize": 25}, bins=bins, range=ranges, alpha=0.7)
     axes = np.array(fig.axes).reshape((data_tes.shape[-1], data_tes.shape[-1]))
     for ax in fig.get_axes():
         ax.tick_params(axis='both', which='major', direction='in', length=5, labelsize=15, width=2)
         ax.xaxis.set_ticks_position('both')
         ax.yaxis.set_ticks_position('both')
-    axes[0, -3].text(0.6, 0.4, f'Relative Flux\n{anno}', c='k',
+    axes[0, -3].text(0.6, 0.4, anno, c='k',
                 fontsize=20, horizontalalignment='center', weight='bold')
     axes[1, -3].text(0.6, 1.0, f'Test Set', c='k',
                 fontsize=20, horizontalalignment='center', weight='bold')
@@ -38,7 +40,7 @@ def cornerplots(data_tes, output_tes, labels, bins, ranges, anno, name, noisy=Fa
         tag = 'Deconvolved'
     if noisy is True:
         tag = 'Reconvolved'
-    axes[1, -3].text(0.6, 0.8, f'Samples on NN ({tag})', c='tab:blue',
+    axes[1, -3].text(0.6, 0.8, f'Samples on NN ({tag})', c='r',
                 fontsize=20, horizontalalignment='center', weight='bold')
     if noisy is False:
         tag = 'clean'
@@ -57,6 +59,12 @@ def make_gif(Jbin_len,K,tag,save_name):
     images = [imageio.imread(file) for file in files]
     imageio.mimwrite(folder+save_name+'.gif', images, fps=1.5)
 
+def f2mag(f):
+    return 22.5 - 2.5 * np.log10(f)
+
+def mag2f(mag):
+    return 10**((22.5 - mag) / 2.5)
+
 
 
 def all_figures(K,
@@ -74,14 +82,24 @@ def all_figures(K,
     """
 
     # parameters for plotting
-    bins=50
+    bins=25
     labels = ['$f_z$','$f_Y$', '$f_H$','$f_{Ks}$','$f_{W1}$','$f_{W2}$']
     ranges = [(-0.5,1.),(-0.7,1.4),(-1.2,3.1),(-1.6,5.),(-2.5,8.3),(-4,12)]
     # parameters of plots in J band flux bins
+    '''
     Jbin_len = 5
     Jbin_l = torch.linspace(1, 5, Jbin_len)
     Jbin_r = Jbin_l + 4/(Jbin_len-1)
     Jbin_r[-1] = 999
+    '''
+    path = 'data/'
+    file_name = 'bin_edges_stars.fits'
+    file = fits.open(path+file_name)
+    edges = copy.deepcopy(file[1].data)
+    file.close()
+    Jbin_l = edges['ed_l']
+    Jbin_r = edges['ed_h']
+    Jbin_len = len(Jbin_l)
     
     
     #All figures to show the performances of our network.
@@ -103,11 +121,11 @@ def all_figures(K,
     
     # the corner plot of the relative fluxes in each J band flux bin
     for i in range(Jbin_len):
-        bln = (torch.exp(f_J_tes)>=Jbin_l[i]) & (torch.exp(f_J_tes)<Jbin_r[i])
+        bln = (torch.exp(f_J_tes)<mag2f(Jbin_l[i])) & (torch.exp(f_J_tes)>=mag2f(Jbin_r[i]))
         bln = bln.numpy().flatten()
         data_tes_i = data_tes[bln]
         output_tes_i = output_tes[bln]
-        anno = f'{Jbin_l[i]:.1f}<$f_J$<{Jbin_r[i]:.1f}'
+        anno = f'{Jbin_l[i]:.1f}<$J$<{Jbin_r[i]:.1f}'
         name = f'd_J{i:d}_K{K:d}'
         cornerplots(data_tes_i, output_tes_i, labels, bins, ranges, anno, name, noisy=True)
 
@@ -139,11 +157,11 @@ def all_figures(K,
     cornerplots(data_tes, output_tes, labels, bins, ranges, '', name, noisy=False)
     # the corner plot of the relative fluxes in each J band flux bin
     for i in range(Jbin_len):
-        bln = (torch.exp(f_J_tes)>=Jbin_l[i]) & (torch.exp(f_J_tes)<Jbin_r[i])
+        bln = (torch.exp(f_J_tes)<mag2f(Jbin_l[i])) & (torch.exp(f_J_tes)>=mag2f(Jbin_r[i]))
         bln = bln.numpy().flatten()
         data_tes_i = data_tes[bln]
         output_tes_i = output_tes[bln]
-        anno = f'{Jbin_l[i]:.1f}<$f_J$<{Jbin_r[i]:.1f}'
+        anno = f'{Jbin_l[i]:.1f}<$J$<{Jbin_r[i]:.1f}'
         name = f'd_J{i:d}_K{K:d}'
         cornerplots(data_tes_i, output_tes_i, labels, bins, ranges, anno, name, noisy=False)
 
@@ -152,7 +170,6 @@ def all_figures(K,
     make_gif(Jbin_len, K, tag, save_name)
     plt.close()
     
-    plt.show()
 
 
 

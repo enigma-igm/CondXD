@@ -192,4 +192,7 @@ for i in range(120):
 bln = torch.isinf(self.reg_loss(covars))
 print(conditional[bln])
 '''
+
+#Riccardo's bin
+#His tricks
         
