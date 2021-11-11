@@ -1,3 +1,5 @@
+from comet_ml import Experiment
+
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -17,6 +19,27 @@ import os
 from IPython import embed
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
+experiment = Experiment(
+    api_key="3OL9Cr63OABpmGEDoiLeXFzhj",
+    project_name="GMMnet",
+    workspace="protesticon",
+)
+
+hyper_params = {
+    "learning_rate": 1e-3,
+    "batch_size": 500,
+    "schedule_factor": 0.4,
+    "patience": 2,
+    "num_epoch": 100,
+    "weight_decay": 0.001,
+    "size_tra": 70,
+    "size_val": 15,
+    "size_tes": 15,
+    "num_Gauss": 20
+}
+
+experiment.log_parameters(hyper_params)
 
 # read file
 file = fits.open('../../4Master/Research1/VIKING_catalog.fits')
@@ -45,7 +68,7 @@ data_set = data_set.transpose(1, 0)
 f_z_err = data['f_z_err']
 f_Y_err = data['f_Y_err']
 f_H_err = data['f_H_err']
-f_Ks_err = data['f_Ks']
+f_Ks_err = data['f_Ks_err']
 f_w1_err = data['f_w1_err']
 f_w2_err = data['f_w2_err']
 err_set  = torch.Tensor(np.array([f_z_err, f_Y_err, f_H_err, f_Ks_err, f_w1_err, f_w2_err]))
@@ -63,24 +86,30 @@ err_set = err_set[bln]
 # setup parameter: length of data and data dimension
 len_data, D = data_set.shape
 # Gaussian components
-K = 20
+K = hyper_params['num_Gauss']
 # size of training / validation / test set
-size_tra = 80
-size_val = 5
-size_tes = 15
+size_tra = hyper_params['size_tra']
+size_val = hyper_params['size_val']
+size_tes = hyper_params['size_tes']
 
 
-# new covariance matrix
-err_r_set = torch.zeros((len_data, D, D))
-# off-diagonal element
-high_SN_bln = ((22.5 - 2.5*torch.log10(f_J)) <= 21).flatten()
-for i in range(1, D):
-    for j in range(i):
-        err_r_set[high_SN_bln,i,j] = (data_set[:,i] * data_set[:,j] / f_J[:,0]**2 * f_J_err[:,0]**2)[high_SN_bln]
-err_r_set = err_r_set + err_r_set.transpose(2, 1)
-# diagonal element
-for i in range(D):
-    err_r_set[:,i,i] = 1/f_J[:,0]**2 * err_set[:,i]**2 + data_set[:,i]**2 / f_J[:,0]**2 * f_J_err[:,0]**2
+def get_noise_covar(len_data, D, f_J, f_J_err, data_set, err_set):
+    # new covariance matrix
+    err_r_set = torch.zeros((len_data, D, D))
+    # off-diagonal element
+    high_SN_bln = ((22.5 - 2.5*torch.log10(f_J)) <= 21).flatten()
+    for i in range(1, D):
+        for j in range(i):
+            err_r_set[high_SN_bln,i,j] = (data_set[:,i] * data_set[:,j] / f_J[:,0]**2 * f_J_err[:,0]**2)[high_SN_bln]
+    err_r_set = err_r_set + err_r_set.transpose(2, 1)
+    # diagonal element
+    for i in range(D):
+        err_r_set[:,i,i] = 1/f_J[:,0]**2 * err_set[:,i]**2 + data_set[:,i]**2 / f_J[:,0]**2 * f_J_err[:,0]**2
+
+    return err_r_set
+
+err_r_set = get_noise_covar(len_data, D, f_J, f_J_err, data_set, err_set)
+
 
 f_J_err = f_J_err/f_J
 f_J = torch.log(f_J)
@@ -130,10 +159,10 @@ err_r_tes = err_r_tes/np.outer(data_tra_std, data_tra_std)
 del data_set, err_set
 
 # put data into batches
-batch_size = 500
+batch_size = hyper_params['batch_size']
 train_loader_tra = DataLoader(TensorDataset(f_J_tra, data_tra, err_r_tra), batch_size=batch_size, shuffle=True)
-train_loader_val = DataLoader(TensorDataset(f_J_val, data_val, err_r_val), batch_size=batch_size)
-train_loader_tes = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size)
+train_loader_val = DataLoader(TensorDataset(f_J_val, data_val, err_r_val), batch_size=batch_size, shuffle=False)
+train_loader_tes = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size, shuffle=False)
 
 
 # kmeans to classify each data point. The means0 serves as the origin of the means.
@@ -147,16 +176,18 @@ means0_t = kmeans_t.cluster_centers_
 
 # NN initialization
 gmm = GMMNet(K, D, 1, torch.FloatTensor(means0_t))
-
-learning_rate = 1e-3
-optimizer = torch.optim.Adam(gmm.parameters(), lr=learning_rate, weight_decay=0.001)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.4, patience=2)
+optimizer = torch.optim.Adam(gmm.parameters(),
+                            lr=hyper_params["learning_rate"], 
+                            weight_decay=hyper_params["weight_decay"])
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+                                                    factor=hyper_params["schedule_factor"], 
+                                                    patience=hyper_params["schedule_factor"])
 
 
 
 # training process
 # training loop
-epoch = 100
+epoch = hyper_params["num_epoch"]
 lowest_loss = 9999
 best_model  = copy.deepcopy(gmm)
 for n in range(epoch):
@@ -165,12 +196,15 @@ for n in range(epoch):
         gmm.train()
         train_loss = 0
         for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader_tra):
+            size_batch_i = f_J_i.shape[0]
             optimizer.zero_grad()
             log_prob_b, loss = gmm.fit(data_i, f_J_i, noise=err_r_i, regression=True)
             train_loss += loss
             # backward and update parameters
             loss.backward()
             optimizer.step()
+
+            experiment.log_metric('batch_tra_loss', loss/size_batch_i, step=i)
         
         train_loss = train_loss / size_tra
         print('\nEpoch', (n+1), 'Training loss:', train_loss.item())
@@ -180,9 +214,12 @@ for n in range(epoch):
         gmm.eval()
         val_loss = 0
         for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader_val):
+            size_batch_i = f_J_i.shape[0]
             optimizer.zero_grad()
             log_prob_b, loss = gmm.fit(data_i, f_J_i, noise=err_r_i)
             val_loss += loss
+
+            experiment.log_metric('batch_val_loss', loss/size_batch_i, step=i)
         
         val_loss = val_loss / size_val
         print('Epoch', (n+1), 'Validation loss:', val_loss.item())
@@ -195,7 +232,7 @@ for n in range(epoch):
 
     except KeyboardInterrupt:
         break
-embed()    
+   
 all_figures(K, D, train_loader_tes, gmm)
 
 gmm.eval()
