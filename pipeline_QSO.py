@@ -3,20 +3,14 @@ from comet_ml import Experiment
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from data.toy import *
 from models.model import *
-from diagnostics.toy import all_figures
-
-import seaborn as sns
+from diagnostics.plots import all_figures
 
 from astropy.io import fits
-
-from sklearn.cluster import KMeans
+import numpy as np
 
 import copy
 import os
-
-from IPython import embed
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
@@ -42,7 +36,7 @@ hyper_params = {
 experiment.log_parameters(hyper_params)
 
 # read file
-file = fits.open('../../4Master/Research1/VIKING_catalog.fits')
+file = fits.open('data/VIKING_catalog.fits')
 data = copy.deepcopy(file[1].data)
 file.close()
 
@@ -75,14 +69,8 @@ err_set  = torch.Tensor(np.array([f_z_err, f_Y_err, f_H_err, f_Ks_err, f_w1_err,
 err_set  = err_set.transpose(1, 0)
 
 del data
-'''
-# test: a narrow J band flux bin
-bln = ((f_J>=1) & (f_J<=1.5)).flatten()
-f_J = f_J[bln]
-f_J_err = f_J_err[bln]
-data_set = data_set[bln]
-err_set = err_set[bln]
-'''
+
+
 # setup parameter: length of data and data dimension
 len_data, D = data_set.shape
 # Gaussian components
@@ -94,6 +82,19 @@ size_tes = hyper_params['size_tes']
 
 
 def get_noise_covar(len_data, D, f_J, f_J_err, data_set, err_set):
+    """Generating the covariant noisy matrix of the relative fluxes.
+
+    Args:
+        len_data (int): length, or size of the data.
+        D (int): number of dimensions of the data.
+        f_J (tensor): 1D tensor of J band fluxes.
+        f_J_err (tensor): error of the J band fluxes.
+        data_set (tensor): dataset of relative fluxes, shape (len_data, D).
+        err_set ([type]): error of original fluxes, shape(len_data, D).
+
+    Returns:
+        tensor: covariant noisy matrix of the relative fluxes.
+    """
     # new covariance matrix
     err_r_set = torch.zeros((len_data, D, D))
     # off-diagonal element
@@ -111,10 +112,10 @@ def get_noise_covar(len_data, D, f_J, f_J_err, data_set, err_set):
 err_r_set = get_noise_covar(len_data, D, f_J, f_J_err, data_set, err_set)
 
 
+# log to prevent exploding
 f_J_err = f_J_err/f_J
 f_J = torch.log(f_J)
-#f_J_err = f_J_err/f_J.std()
-#f_J = (f_J-f_J.mean()) / f_J.std()
+
 
 # divide to training and validation set
 def real_size(size_tra, size_val, size_tes, len_data):
@@ -142,46 +143,26 @@ f_J_tes, f_J_err_tes = get_set(f_J, f_J_err, id_sep, 3)
 data_tra, err_r_tra = get_set(data_set, err_r_set, id_sep, 1)
 data_val, err_r_val = get_set(data_set, err_r_set, id_sep, 2)
 data_tes, err_r_tes = get_set(data_set, err_r_set, id_sep, 3)
-'''
-#embed()
-data_tra_mean = data_tra.mean(axis=0)
-data_tra_std  = data_tra.std(axis=0)
 
-data_tra  = (data_tra - data_tra_mean)/data_tra_std
-err_r_tra = err_r_tra/np.outer(data_tra_std, data_tra_std)
-
-data_val  = (data_val - data_tra_mean)/data_tra_std
-err_r_val = err_r_val/np.outer(data_tra_std, data_tra_std)
-
-data_tes  = (data_tes - data_tra_mean)/data_tra_std
-err_r_tes = err_r_tes/np.outer(data_tra_std, data_tra_std)
-'''
 del data_set, err_set
 
 # put data into batches
 batch_size = hyper_params['batch_size']
-train_loader_tra = DataLoader(TensorDataset(f_J_tra, data_tra, err_r_tra), batch_size=batch_size, shuffle=True)
-train_loader_val = DataLoader(TensorDataset(f_J_val, data_val, err_r_val), batch_size=batch_size, shuffle=False)
-train_loader_tes = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size, shuffle=False)
+train_loader = DataLoader(TensorDataset(f_J_tra, data_tra, err_r_tra), batch_size=batch_size, shuffle=True)
+valid_loader = DataLoader(TensorDataset(f_J_val, data_val, err_r_val), batch_size=batch_size, shuffle=False)
+test_loader  = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size, shuffle=False)
 
-
-# kmeans to classify each data point. The means0 serves as the origin of the means.
-kmeans_t = KMeans(n_clusters=K, random_state=0).fit(data_tra.numpy())
-means0_t = kmeans_t.cluster_centers_
-
-#kmeans_v = KMeans(n_clusters=K, random_state=0).fit(data_val.numpy())
-#means0_v = kmeans_v.cluster_centers_
 
 
 
 # NN initialization
-gmm = GMMNet(K, D, 1, torch.FloatTensor(means0_t))
+gmm = GMMNet(K, D, conditional_dim=1)
 optimizer = torch.optim.Adam(gmm.parameters(),
                             lr=hyper_params["learning_rate"], 
                             weight_decay=hyper_params["weight_decay"])
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                     factor=hyper_params["schedule_factor"], 
-                                                    patience=hyper_params["schedule_factor"])
+                                                    patience=hyper_params["patience"])
 
 
 
@@ -195,10 +176,10 @@ for n in range(epoch):
         # training
         gmm.train()
         train_loss = 0
-        for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader_tra):
+        for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader):
             size_batch_i = f_J_i.shape[0]
             optimizer.zero_grad()
-            log_prob_b, loss = gmm.fit(data_i, f_J_i, noise=err_r_i, regression=True)
+            log_prob_b, loss = gmm.score(data_i, f_J_i, noise=err_r_i, regression=True)
             train_loss += loss
             # backward and update parameters
             loss.backward()
@@ -213,10 +194,10 @@ for n in range(epoch):
         # validating
         gmm.eval()
         val_loss = 0
-        for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader_val):
+        for i, (f_J_i, data_i, err_r_i) in enumerate(valid_loader):
             size_batch_i = f_J_i.shape[0]
             optimizer.zero_grad()
-            log_prob_b, loss = gmm.fit(data_i, f_J_i, noise=err_r_i)
+            log_prob_b, loss = gmm.score(data_i, f_J_i, noise=err_r_i)
             val_loss += loss
 
             experiment.log_metric('batch_val_loss', loss/size_batch_i, step=i)
@@ -233,12 +214,12 @@ for n in range(epoch):
     except KeyboardInterrupt:
         break
    
-all_figures(K, D, train_loader_tes, gmm)
+all_figures(K, D, test_loader, best_model)
 
-gmm.eval()
+best_model.eval()
 tes_loss = 0
-for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader_tes):
-    log_prob_b, loss = gmm.fit(data_i, f_J_i, noise=err_r_i)
+for i, (f_J_i, data_i, err_r_i) in enumerate(test_loader):
+    log_prob_b, loss = best_model.score(data_i, f_J_i, noise=err_r_i)
     tes_loss += loss
 
 tes_loss = tes_loss / size_tes
