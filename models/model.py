@@ -99,7 +99,9 @@ class GMMNet(nn.Module):
         return l.sum(axis=(-1,-2))
     
 
-    def log_prob_b(self, data, weights, means, covars, noise=None):
+    def log_prob_b(self, data, conditional, noise=None):
+
+        weights, means, covars = self.forward(conditional)
 
         if noise is None:
             noise = torch.zeros_like(covars)
@@ -122,11 +124,23 @@ class GMMNet(nn.Module):
 
         weights, means, covars = self.forward(conditional)
 
-        log_prob_b = self.log_prob_b(data, weights, means, covars, noise)
+        if noise is None:
+            noise = torch.zeros_like(covars)
+        # elif noise.dim() != covars.dim():
+        else:
+            noise = noise[:, None, ...]  # add noise to all components
+
+        noisy_covars = covars + noise
+
+        log_resp = mvn(loc=means, covariance_matrix=noisy_covars).log_prob(data[:, None, :])
+
+        log_resp += torch.log(weights)
+
+        log_prob_b = torch.logsumexp(log_resp, dim=1)
         
         if regression is False:
             train_loss = (-log_prob_b).sum()
-        elif regression is True:
+        else:
             train_loss = (-log_prob_b + self.reg_loss(covars)).sum()
 
         return log_prob_b, train_loss

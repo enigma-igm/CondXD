@@ -1,5 +1,3 @@
-from comet_ml import Experiment
-
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -12,13 +10,15 @@ import numpy as np
 import copy
 import os
 
+from IPython import embed
+
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-experiment = Experiment(
-    api_key="3OL9Cr63OABpmGEDoiLeXFzhj",
-    project_name="GMMnet",
-    workspace="protesticon",
-)
+#experiment = Experiment(
+#    api_key="3OL9Cr63OABpmGEDoiLeXFzhj",
+#    project_name="GMMnet",
+#    workspace="protesticon",
+#)
 
 hyper_params = {
     "learning_rate": 1e-3,
@@ -33,7 +33,7 @@ hyper_params = {
     "num_Gauss": 20
 }
 
-experiment.log_parameters(hyper_params)
+#experiment.log_parameters(hyper_params)
 
 # read file
 file = fits.open('data/VIKING_catalog.fits')
@@ -41,6 +41,7 @@ data = copy.deepcopy(file[1].data)
 file.close()
 
 # load reference band and error
+f_J = data['f_J'].astype('float').reshape(-1, 1)
 f_J = data['f_J'].astype('float').reshape(-1, 1)
 f_J_err = data['f_J_err'].astype('float').reshape(-1, 1)
 # transform to tensor
@@ -56,7 +57,6 @@ rf_w1 = data['f_w1'] / data['f_J']
 rf_w2 = data['f_w2'] / data['f_J']
 data_set = torch.Tensor(np.array([rf_z, rf_Y, rf_H, rf_Ks, rf_w1, rf_w2]))
 data_set = data_set.transpose(1, 0)
-
 
 # load errors
 f_z_err = data['f_z_err']
@@ -185,7 +185,7 @@ for n in range(epoch):
             loss.backward()
             optimizer.step()
 
-            experiment.log_metric('batch_tra_loss', loss/size_batch_i, step=i)
+            #experiment.log_metric('batch_tra_loss', loss/size_batch_i, step=i)
         
         train_loss = train_loss / size_tra
         print('\nEpoch', (n+1), 'Training loss:', train_loss.item())
@@ -200,7 +200,7 @@ for n in range(epoch):
             log_prob_b, loss = gmm.score(data_i, f_J_i, noise=err_r_i)
             val_loss += loss
 
-            experiment.log_metric('batch_val_loss', loss/size_batch_i, step=i)
+            #experiment.log_metric('batch_val_loss', loss/size_batch_i, step=i)
         
         val_loss = val_loss / size_val
         print('Epoch', (n+1), 'Validation loss:', val_loss.item())
@@ -214,7 +214,7 @@ for n in range(epoch):
     except KeyboardInterrupt:
         break
    
-all_figures(K, D, test_loader, best_model)
+#all_figures(K, D, test_loader, best_model)
 
 best_model.eval()
 tes_loss = 0
