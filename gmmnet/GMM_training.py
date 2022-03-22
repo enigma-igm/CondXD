@@ -250,15 +250,16 @@ class GMM:
         best_model.load_state_dict(torch.load(f'XD_fit_models/{self.n_gauss}G_{model_name}.pkl'))
         best_model.eval()
 
-        output = np.zeros(len(self.ref_f))
-        output_noisy = np.zeros(len(self.ref_f))
+        output = torch.zeros_like(self.rel_flux)
+        output_noisy = torch.zeros_like(self.rel_flux)
 
         for i in range(len(self.ref_f)):
-            output[i] = best_model.sample(self.ref_f[i], 1)
-            output_noisy[i] = best_model.sample(self.ref_f[i], 1, self.rel_flux_err[i])
+            output[i] = best_model.sample(self.ref_f[i].unsqueeze(0), 1)
+            output_noisy[i] = best_model.sample(self.ref_f[i].unsqueeze(0), 1,
+                                                self.rel_flux_err[i].unsqueeze(0))
 
-        #output = output.reshape(-1, self.n_gauss).numpy()
-        #output_noisy = output_noisy.reshape(-1, self.n_gauss).numpy()
+        output = output.reshape(-1, self.n_gauss).numpy()
+        output_noisy = output_noisy.reshape(-1, self.n_gauss).numpy()
         real_data = self.rel_flux.numpy()
 
         return real_data, output, output_noisy
