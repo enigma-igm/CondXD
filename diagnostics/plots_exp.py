@@ -4,23 +4,36 @@ import torch
 
 from models.model import mvn
 
-torch.set_num_threads(1)
-from IPython import embed
+
+# training and validation loss
+def loss_in_process(train_loss_list, valid_loss_list, fig_path):
+    fig, ax = plt.subplots()
+    ax.plot(range(len(train_loss_list)), train_loss_list, label='training loss', color='tab:red', linestyle='solid')
+    ax.plot(range(len(train_loss_list)), valid_loss_list, label='validation loss', color='tab:red', linestyle='dashed')
+    ax.set_xlabel('Training Epoch', fontsize=14)
+    ax.set_ylabel('Loss', fontsize=14)
+    ax.legend(fontsize=10)
+    fig.savefig(fig_path+'loss.pdf')
+    
+    plt.close()
+
+
 # weights comparison plot
 def weights_comp(cond, weights_r, weights_p, path):
     K = weights_r.shape[-1]
     fig, ax = plt.subplots()
-    pw_r = ax.plot(cond.flatten(), weights_r, color='tab:blue', label='Real')
-    pw_p = ax.plot(cond.flatten(), weights_p, color='tab:orange', label='Predicted')
+    pw_r = ax.plot(cond.flatten(), weights_r, color='black', label='Real')
+    pw_p = ax.plot(cond.flatten(), weights_p, color='tab:red', label='Predicted')
     ax.set_xlabel(r'Conditional $\mathbf{c}$', fontsize=14)
-    ax.set_ylabel(r'Weights $\mathbf{c}$', fontsize=14)
+    ax.set_ylabel(r'Weights', fontsize=14)
     ax.set_title(f'Weights of {K} Components', fontsize=16)
     customs = [pw_r[0], pw_p[0]]
     ax.legend(customs, [pw_r[0].get_label(), pw_p[0].get_label()], fontsize=10)
     plt.savefig(path+'weights.pdf')
 
+    plt.close()
 
-# means comparison plot
+
 def means_comp(cond, means_r, means_p, path):
 
     from matplotlib.collections import LineCollection
@@ -34,7 +47,7 @@ def means_comp(cond, means_r, means_p, path):
     for i in range(K):
         points = means_r[:,i,:].reshape(-1, 1, D)[:,:,0:2]
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
-        lc = LineCollection(segments, cmap='Blues', norm=norm)
+        lc = LineCollection(segments, cmap='Greys', norm=norm)
         # Set the values used for colormapping
         lc.set_array(cond.flatten())
         lc.set_linewidth(2)
@@ -46,20 +59,22 @@ def means_comp(cond, means_r, means_p, path):
     for i in range(K):
         points = means_p[:,i,:].reshape(-1, 1, D)[:,:,0:2]
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
-        lc = LineCollection(segments, cmap='Oranges', norm=norm)
+        lc = LineCollection(segments, cmap='Reds', norm=norm)
         # Set the values used for colormapping
         lc.set_array(cond.flatten())
         lc.set_linewidth(2)
-        line = ax.add_collection(lc)
-        
+        line = ax.add_collection(lc)      
     cbar = plt.colorbar(line, ax=ax, aspect=15)
     cbar.set_label(r'Predicted vs Conditional $\mathbf{c}$', fontsize=14)
+
     ax.set_xlim(means_p[:,:,0].min()-0.5, means_p[:,:,0].max()+0.5)
     ax.set_ylim(means_p[:,:,1].min()-0.5, means_p[:,:,1].max()+0.5)
     ax.set_xlabel('Dimension 1', fontsize=14)
     ax.set_ylabel('Dimension 2', fontsize=14)
     ax.set_title(f'Means of {K} Gaussians', fontsize=16)
     fig.savefig(path+'means.pdf')
+
+    plt.close()
 
 
 # covariance comparison plot
@@ -70,8 +85,8 @@ def covars_comp(cond, covars_r, covars_p, num, path):
     fig, ax = plt.subplots(num, 1, figsize=(6,num*1.7), sharex=True)
     fig.subplots_adjust(hspace=0)
     for i in range(num):
-        pde_r = ax[i].plot(cond, covars_r[:,:,i,i], color='tab:blue', label='Real')
-        pde_p = ax[i].plot(cond, covars_p[:,:,i,i], color='tab:orange', label='Predicted')
+        pde_r = ax[i].plot(cond, covars_r[:,:,i,i], color='black', label='Real')
+        pde_p = ax[i].plot(cond, covars_p[:,:,i,i], color='tab:red', label='Predicted')
         ax[i].set_ylabel(f'{i+1, i+1} Element')
         ax[i].set_ylim([0, 0.4])
         ax[i].set_yticks(np.arange(0, 0.4, 0.1))
@@ -81,9 +96,22 @@ def covars_comp(cond, covars_r, covars_p, num, path):
     ax[0].set_title(f'Elements of Covariances of {K} Gaussians', fontsize=16)
     fig.savefig(path+'/covars.pdf')
 
+    plt.close()
+
+
+# get the plotting ranges of a corner plot
+def get_ranges(figure):
+
+    axes = figure.get_axes()
+    D = int(len(axes)**0.5)
+    
+    ranges = [axes[i*(D+1)].get_xlim() for i in range(D)]
+
+    return ranges
+
 
 # density comparison plot
-def density_comp(data_r, data_p, label, bins, conditional, noisy, path):
+def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=None):
     """[summary]
 
     Args:
@@ -104,23 +132,32 @@ def density_comp(data_r, data_p, label, bins, conditional, noisy, path):
         tag = 'Noise Convolved'
     D = data_r.shape[-1]
 
-    figure = corner.corner(data_r, color='tab:blue', labels=label, label_kwargs=dict(fontsize=16), bins=bins)
-    corner.corner(data_p, fig=figure, color='tab:orange', labels=label, label_kwargs=dict(fontsize=16), bins=bins)
+    figure = corner.corner(data_r, bins=nbins, range=ranges,
+                        color='black', labels=label, label_kwargs=dict(fontsize=16))
+    if ranges is None:
+        ranges = get_ranges(figure) # keeping the same range and bins
+    corner.corner(data_p, bins=nbins, range=ranges, fig=figure, 
+                        color='tab:red', labels=label, label_kwargs=dict(fontsize=16), alpha=0.7)
+    
     axes = np.array(figure.axes).reshape(D, D)
     for ax in figure.get_axes():
         ax.tick_params(axis='both', direction='in', labelsize=12)
-    annotate = 'Samples on NN vs Samples on Real Model,\n cond $\mathbf{c}$'+f'={conditional:.2f}'
-    axes[1, -3].text(0.6, 0.8, annotate, fontsize=25, horizontalalignment='center', c='k', weight='bold')
-    axes[1, -3].text(0.6, 0.5, tag+f' Real Model', fontsize=25, horizontalalignment='center', c='tab:blue', weight='bold')
-    axes[1, -3].text(0.6, 0.2, tag+f' NN Prediction', fontsize=25, horizontalalignment='center', c='tab:orange', weight='bold')
+    
+    # setting annotates
+    axes[1, -3].text(0.6, 0.8, tag+' Real Model, cond $\mathbf{c}$'+f'={conditional:.2f}',
+                    fontsize=25, horizontalalignment='center', c='k', weight='bold')
+    axes[1, -3].text(0.6, 0.5, tag+f' Prediction',
+                    fontsize=25, horizontalalignment='center', c='tab:red', weight='bold')
     figure.savefig(path+name+f'Comp_{conditional:.2f}.pdf')
+
+    return figure
 
 
 # K-L divergence plot
 def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
                 weights_r, means_r, covars_r, noise,
-                condGMM, cond_bin_edges, path,
-                binGMM=None):
+                CondXD, cond_bin_edges, path,
+                binXD=None):
     """Plotting the Kullback-Leibler divergence vs Conditional. Output plots to figs/experiment/.
 
     Args:
@@ -129,7 +166,7 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
         weights_r (narray): The weights of the real simulated model. Shaped LxK.
         means_r (narray): The means of the real simulated model. Shaped LxKxD.
         covars_r (narray): The covariances of the real simulated model. Shaped LxKxDxD. Must be positive definite.
-        model (class): The GMM neural network.
+        model (class): The CondXD neural network.
         path (string): output path of the figure.
 
     Returns:
@@ -146,18 +183,18 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
     # 
     KL_div_clean = np.zeros(L)
     KL_div_noisy = np.zeros(L)
-    KL_div_cross = np.zeros(L)
+    KL_div_maxim = np.zeros(L)
 
-    if binGMM is not None:
+    if binXD is not None:
         KL_div_bin_clean = np.zeros(L)
         KL_div_bin_noisy = np.zeros(L)
-        KL_div_bin_cross = np.zeros(L)
+        KL_div_bin_maxim = np.zeros(L)
     
     weights_r = torch.FloatTensor(weights_r) 
     means_r   = torch.FloatTensor(means_r) 
     covars_r  = torch.FloatTensor(covars_r)
     noise     = torch.FloatTensor(noise)
-    weights_p, means_p, covars_p = condGMM(torch.FloatTensor(cond).reshape(-1,1))
+    weights_p, means_p, covars_p = CondXD(torch.FloatTensor(cond).reshape(-1,1))
     
     
     for i in range(L):
@@ -176,75 +213,72 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
         covars_p_i  = covars_p[bin_filter]
 
         # for the deconvolved model
-        logp_r_clean = condGMM.log_prob_b(torch.FloatTensor(data_r_clean_i), 
+        logp_r_clean = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i), 
                                         weights_r_i, means_r_i, covars_r_i).detach().numpy()
-        logp_p_clean = condGMM.log_prob_b(torch.FloatTensor(data_r_clean_i),
+        logp_p_clean = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i),
                                         weights_p_i, means_p_i, covars_p_i).detach().numpy()
         KL_div_clean[i] = (logp_r_clean - logp_p_clean).mean()
 
         # for the noise convolved model
-        logp_r_noisy = condGMM.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
+        logp_r_noisy = CondXD.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
                                         weights_r_i, means_r_i, covars_r_i, noise=noise_i).detach().numpy()
-        logp_p_noisy = condGMM.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
+        logp_p_noisy = CondXD.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
                                         weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
         KL_div_noisy[i] = (logp_r_noisy - logp_p_noisy).mean()
 
         # probability of deconvolved samples on noise convolved model
-        logp_p_cross = condGMM.log_prob_b(torch.FloatTensor(data_r_clean_i),
+        logp_p_maxim = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i),
                                         weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
-        KL_div_cross[i] = (logp_r_clean - logp_p_cross).mean()
+        KL_div_maxim[i] = (logp_r_clean - logp_p_maxim).mean()
 
 
-        # KL divergence plot for the old bin GMM method
-        if binGMM is not None:
-            binGMM_i = binGMM[i]
-            weights_p_i = torch.FloatTensor(binGMM_i.weights)
-            means_p_i   = torch.FloatTensor(binGMM_i.mu)
-            covars_p_i  = torch.FloatTensor(binGMM_i.V)
+        # KL divergence plot for the old binXD method
+        if binXD is not None:
+            weights_p_i = torch.FloatTensor(binXD[i].weights)
+            means_p_i   = torch.FloatTensor(binXD[i].mu)
+            covars_p_i  = torch.FloatTensor(binXD[i].V)
             
             # for the deconvolved model
-            logp_p_clean = condGMM.log_prob_b(torch.FloatTensor(data_r_clean_i),
+            logp_p_clean = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i),
                                             weights_p_i, means_p_i, covars_p_i).detach().numpy()
             KL_div_bin_clean[i] = (logp_r_clean - logp_p_clean).mean()
 
             # for the noise convolved model
-            logp_p_noisy = condGMM.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
+            logp_p_noisy = CondXD.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
                                             weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
             KL_div_bin_noisy[i] = (logp_r_noisy - logp_p_noisy).mean()
 
             # probability of deconvolved samples on noise convolved model
-            logp_p_cross = condGMM.log_prob_b(torch.FloatTensor(data_r_clean_i),
+            logp_p_maxim = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i),
                                         weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
-            KL_div_bin_cross[i] = (logp_r_clean - logp_p_cross).mean()
+            KL_div_bin_maxim[i] = (logp_r_clean - logp_p_maxim).mean()
             
 
 
     # figure. KL divergence vs conditional
-    from matplotlib.lines import Line2D
     fig, ax = plt.subplots()
     cond_axis = cond_bin_edges.mean(axis=-1)
-    linetypes = ['Noise Convovled', 'Noise Deconvovled', 'Cross']
-    ax.plot(cond_axis, KL_div_noisy, label=linetypes[0], linestyle='solid', color='tab:red')
-    ax.plot(cond_axis, KL_div_clean, label=linetypes[1], linestyle='dashed', color='tab:red')
-    ax.plot(cond_axis, KL_div_cross, label=linetypes[2], linestyle='-.', color='tab:red')
-    ax.legend(fontsize=10)
+    linetypes = ['$D_\mathrm{KL}(\mathrm{noisy\ truth} \| \mathrm{reconvolved\ fitted})$',
+                '$D_\mathrm{KL}(\mathrm{truth} \| \mathrm{deconvolved\ fitted})$',
+                'Estimated Max $D_\mathrm{KL}$']
+    methods   = ['', '']
+    if binXD is not None:
+        methods = [', CondXD', ', bin-XD']
+    
+    ax.plot(cond_axis, KL_div_noisy, label=linetypes[0]+methods[0], linestyle='solid', color='tab:red')
+    ax.plot(cond_axis, KL_div_clean, label=linetypes[1]+methods[0], linestyle='dashed', color='tab:red')
+    ax.plot(cond_axis, KL_div_maxim, label=linetypes[2]+methods[0], linestyle='-.', color='tab:red')
+    ax.legend(fontsize=10, frameon=False)
 
-    if binGMM is not None:
-        methods = ['condGMM', 'bin-GMM']
-        ax.plot(cond_axis, KL_div_bin_noisy, label=linetypes[0], linestyle='solid', color='tab:blue')
-        ax.plot(cond_axis, KL_div_bin_clean, label=linetypes[1], linestyle='dashed', color='tab:blue')
-        ax.plot(cond_axis, KL_div_bin_cross, label=linetypes[2], linestyle='-.', color='tab:blue')
-        customs1 = [Line2D([0], [0], linestyle='solid', color='tab:red'),
-                    Line2D([0], [0], linestyle='solid', color='tab:blue')]
-        customs2 = [Line2D([0], [0], linestyle='solid', color='k'),
-                    Line2D([0], [0], linestyle='dashed', color='k'),
-                    Line2D([0], [0], linestyle='-.', color='k')]
-        customs = customs1 + customs2
-        labels  = methods  + linetypes
-        ax.legend(customs, labels, fontsize=10)
+    if binXD is not None:
+        ax.plot(cond_axis, KL_div_bin_noisy, label=linetypes[0]+methods[1], linestyle='solid', color='tab:blue')
+        ax.plot(cond_axis, KL_div_bin_clean, label=linetypes[1]+methods[1], linestyle='dashed', color='tab:blue')
+        # not do maximum estimation of bin-XD
+        ax.legend(fontsize=10, frameon=False)
+    ax.set_xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ax.set_xlabel('Conditional Parameter c', fontsize=14)
-    ax.set_ylabel('K-L Divergence', fontsize=14)
-    ax.set_title('K-L Divergence vs Conditional', fontsize=16)
+    ax.set_ylabel('$D_\mathrm{KL}$', fontsize=14)
+    ax.set_title('KL Divergence vs Conditional', fontsize=16)
     fig.savefig(path+'KLDiv.pdf')
 
     plt.close()
@@ -252,18 +286,17 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
     KL_div = {}
     KL_div['noisy'] = KL_div_noisy
     KL_div['clean'] = KL_div_clean
-    KL_div['cross'] = KL_div_cross
-    if binGMM is not None:
-        KL_div['noisy_binGMM'] = KL_div_bin_noisy
-        KL_div['clean_binGMM'] = KL_div_bin_clean
-        KL_div['cross_binGMM'] = KL_div_bin_cross
+    KL_div['maxim'] = KL_div_maxim
+    if binXD is not None:
+        KL_div['noisy_binXD'] = KL_div_bin_noisy
+        KL_div['clean_binXD'] = KL_div_bin_clean
+        KL_div['maxim_binXD'] = KL_div_bin_maxim
 
     return KL_div
 
 
 # main function
-def exp_figures(D_cond, K, D, weight_func, means_func, covar_func,
-                noise_func, sample_func, model, cond_bin_edges, path, seed, binGMM=None):
+def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_edges, path, seed, binXD=None):
     """Visualization of the experiment result. Only valid when D_cond=1. Output plots to figs/experiment/.
 
     Args:
@@ -280,9 +313,13 @@ def exp_figures(D_cond, K, D, weight_func, means_func, covar_func,
         seed (int): Random seed.
     """
 
+    loss_in_process(train_loss_list, valid_loss_list, path)
+
     if D_cond != 1:
         print('Plotting canceled, because D_cond != 1.')
         return None
+
+    from data.experiment import weight_func, means_func, covar_func, noise_func, sample_func
     
     cond = np.linspace(0.02, 1, 50).reshape(-1, 1)
     # r for real. real GMM parameters.
@@ -325,7 +362,7 @@ def exp_figures(D_cond, K, D, weight_func, means_func, covar_func,
         data_r_noisy = np.zeros((N_data, D))
         data_p_noisy = np.zeros((N_data, D))
         for i in range(N_data):
-            noise[i]  = noise_func(cond[j], D, sigma_d=1., sigma_l=0.5)
+            noise[i] = noise_func(cond[j], D, sigma_d=1., sigma_l=0.5)
             data_r_noisy[i] = sample_func(weights_r[j], means_r[j], covars_r[j], noise=noise[i])[0]
             data_p_noisy[i] = model.sample(torch.FloatTensor(cond[j]).unsqueeze(0), 1, 
                                             torch.FloatTensor(noise[i]).unsqueeze(0)).squeeze().numpy()
@@ -336,9 +373,12 @@ def exp_figures(D_cond, K, D, weight_func, means_func, covar_func,
 
         # cornerplots clean
         conditional = cond[j][0]
-        density_comp(data_r_clean, data_p_clean, label, bins, conditional, noisy=False, path=path)
+        figure = density_comp(data_r_clean, data_p_clean, label, bins, conditional, noisy=False, path=path)
         # conerplots nosiy
-        density_comp(data_r_noisy, data_p_noisy, label, bins, conditional, noisy=True, path=path)
+        ranges = get_ranges(figure)
+        figure = density_comp(data_r_noisy, data_p_noisy, label, bins, conditional, noisy=True, path=path,
+                                ranges=ranges)
+        del figure
 
 
 
@@ -368,7 +408,7 @@ def exp_figures(D_cond, K, D, weight_func, means_func, covar_func,
                         data_r_clean, data_r_noisy,
                         weights_r, means_r, covars_r, noise,
                         model, cond_bin_edges, path,
-                        binGMM=binGMM)
+                        binXD=binXD)
 
     plt.close()
 

@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from models.model import *
-from diagnostics.plots import *
+from diagnostics.plots_QSO import *
 
 import seaborn as sns
 
