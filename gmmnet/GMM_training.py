@@ -258,8 +258,8 @@ class GMM:
             output_noisy[i] = best_model.sample(self.ref_f[i].unsqueeze(0), 1,
                                                 self.rel_flux_err[i].unsqueeze(0))
 
-        output = output.reshape(-1, self.n_gauss).numpy()
-        output_noisy = output_noisy.reshape(-1, self.n_gauss).numpy()
+        output = output.numpy()
+        output_noisy = output_noisy.numpy()
         real_data = self.rel_flux.numpy()
 
         return real_data, output, output_noisy

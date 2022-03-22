@@ -38,7 +38,7 @@ def cornerplots(real_data, test_data, labels, bins, ranges, legend, name):
         ax.xaxis.set_ticks_position('both')
         ax.yaxis.set_ticks_position('both')
     axes[0, -3].text(0.6, 0.4, 'Real data', c='k', fontsize=25, horizontalalignment='center', weight='bold')
-    axes[1, -3].text(0.6, 1.0, legend, c='k', fontsize=25, horizontalalignment='center', weight='bold')
+    axes[1, -3].text(0.6, 1.0, legend, c='r', fontsize=25, horizontalalignment='center', weight='bold')
     fig.savefig('figs/{}_relative_flux.png'.format(name))
     
 
