@@ -49,7 +49,7 @@ ranges = [(-0.5,1.),(-0.7,1.4),(-1.2,3.1),(-1.6,5.),(-2.5,8.3),(-4,12)]
 
 hdu_list = fits.open(GMM_params['path']+'/'+GMM_params['table_name'], memmap=True)
 output = Table(hdu_list[1].data)
-J_mag = output[GMM_params['ref_flux']].astype('float').reshape(-1, 1)
+J_mag = 22.5-2.5*np.log10(output[GMM_params['ref_flux']].astype('float').reshape(-1, 1))
 
 # Initialize the NN and sample the noisy and noiseless data
 XD = GMM(GMM_params, hyper_params)
@@ -59,11 +59,14 @@ real_data, noiseless_fluxes, noisy_fluxes = XD.sample_data('contaminants')
 # Produce and save the corner plots with the comparison between the real and the deconvolved/convolved data
 J_mag_bin = np.linspace(17,22.3, 54)
 name_fig=[]
-embed()
+
 for i in range(1,len(J_mag_bin)):
     idx = np.where((J_mag <= J_mag_bin[i]) & (J_mag > J_mag_bin[i-1]))
-    cornerplots(real_data[idx], noiseless_fluxes[idx], labels, bins, ranges, legend='Deconvolved data',
+    cornerplots(real_data[idx[0],:], noiseless_fluxes[idx[0],:], labels, bins, ranges, legend='Deconvolved data',
             name='deconvolved_contaminants_{}_J_{}'.format(str(round(J_mag_bin[i-1],2)),str(round(J_mag_bin[i],2))))
+    cornerplots(real_data[idx[0], :], noisy_fluxes[idx[0], :], labels, bins, ranges, legend='Convolved data',
+                name='convolved_contaminants_{}_J_{}'.format(str(round(J_mag_bin[i - 1], 2)),
+                                                               str(round(J_mag_bin[i], 2))))
     name_fig.append('deconvolved_contaminants_{}_J_{}'.format(str(round(J_mag_bin[i-1],2)),str(round(J_mag_bin[i],2))))
 
 # Produce a gif with all the figures produces above
