@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from models.model import *
-from diagnostics.plots import all_figures
+from diagnostics.plots_QSO import all_figures
 
 from astropy.io import fits
 import numpy as np
