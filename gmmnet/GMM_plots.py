@@ -7,7 +7,7 @@ import numpy as np
 
 import corner
 
-def _create_fig_folder():
+def create_fig_folder():
     # Chek the existence of the fig folders and creates it in case it is missing, so to store the plots
     path = os.getcwd()
     if os.path.isdir('figs'):
@@ -28,10 +28,10 @@ def cornerplots(real_data, test_data, labels, bins, ranges, legend, name):
         legend (string): legend of the sampled set on the plot.
         name (string): the specific name of the plot of relative fluxes.
     """
-    _create_fig_folder()
-    fig = corner.corner(real_data, labels=labels, label_kwargs={"fontsize": 25}, bins=bins, range=ranges)
+    fig = corner.corner(real_data, labels=labels, label_kwargs={"fontsize": 25}, bins=bins, range=ranges,
+                        quiet=True,levels=(0.382,0.682,0.866,))
     corner.corner(test_data, fig=fig, color='r', labels=labels, label_kwargs={"fontsize": 25}, bins=bins,
-                  range=ranges, alpha=0.7)
+                  range=ranges, alpha=0.7, quiet=True,levels=(0.382,0.682,0.866,))
     axes = np.array(fig.axes).reshape((real_data.shape[-1], real_data.shape[-1]))
     for ax in fig.get_axes():
         ax.tick_params(axis='both', which='major', direction='in', length=5, labelsize=15, width=2)
@@ -40,6 +40,7 @@ def cornerplots(real_data, test_data, labels, bins, ranges, legend, name):
     axes[0, -3].text(0.6, 0.4, 'Real data', c='k', fontsize=25, horizontalalignment='center', weight='bold')
     axes[1, -3].text(0.6, 1.0, legend, c='r', fontsize=25, horizontalalignment='center', weight='bold')
     fig.savefig('figs/{}_relative_flux.png'.format(name))
+    plt.close()
     
 
 def make_gif(name, save_name):

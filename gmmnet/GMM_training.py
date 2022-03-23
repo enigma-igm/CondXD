@@ -60,11 +60,11 @@ class GMM:
         ref_f = torch.Tensor(ref_f)
         self.ref_f = torch.log(ref_f)
         self.ref_f_err = torch.Tensor(ref_f_err)
-        self.rel_flux_err = self._get_noise_covar(flux_err, low_SN_mag=low_SN_mag)
+        self.rel_flux_err = self._get_noise_covar(flux_err, ref_f, low_SN_mag=low_SN_mag)
 
         self._real_size()
 
-    def _get_noise_covar(self, flux_err, low_SN_mag=21):
+    def _get_noise_covar(self, flux_err, ref_f, low_SN_mag=21):
         """Generating the covariance matrix of the relative fluxes. If the reference mag is fainter than
         the defined SNR (low_SN_mag), then the covariance is simply diagonal.
 
@@ -79,17 +79,17 @@ class GMM:
         err_r_set = torch.zeros((len_data, dimension, dimension))
 
         # compute off-diagonal elements
-        high_SN_bln = ((22.5 - 2.5 * torch.log10(self.ref_f)) <= low_SN_mag).flatten()
+        high_SN_bln = ((22.5 - 2.5 * torch.log10(ref_f)) <= low_SN_mag).flatten()
         for i in range(1, dimension):
             for j in range(i):
-                err_r_set[high_SN_bln, i, j] = (self.rel_flux[:, i] * self.rel_flux[:, j] / self.ref_f[:, 0] ** 2
+                err_r_set[high_SN_bln, i, j] = (self.rel_flux[:, i] * self.rel_flux[:, j] / ref_f[:, 0] ** 2
                                                 * self.ref_f_err[:, 0] ** 2)[high_SN_bln]
         err_r_set = err_r_set + err_r_set.transpose(2, 1)
 
         # compute diagonal elements
         for i in range(dimension):
-            err_r_set[:, i, i] = 1 / self.ref_f[:, 0] ** 2 * flux_err[:, i] ** 2 +\
-                                 self.rel_flux[:, i] ** 2 / self.ref_f[:, 0] ** 2 * self.ref_f_err[:, 0] ** 2
+            err_r_set[:, i, i] = 1 / ref_f[:, 0] ** 2 * flux_err[:, i] ** 2 +\
+                                 self.rel_flux[:, i] ** 2 / ref_f[:, 0] ** 2 * self.ref_f_err[:, 0] ** 2
 
         return err_r_set
 
@@ -243,6 +243,8 @@ class GMM:
         """ Deconvolve and fir GMM to the training data
 
         :param model_name:
+        Returns:
+            the relative fluxes, and the sampled deconvolved and reconvolved relative fluxes
         """
 
         # NN initialization
