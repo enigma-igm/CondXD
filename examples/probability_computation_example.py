@@ -41,7 +41,7 @@ GMM_params = {
 
 start_time = time.time()
 
-#logp = log_prob_computation(GMM_params, hyper_params, '20G_contaminants', 'contaminants')
+logp = log_prob_computation(GMM_params, hyper_params, '20G_contaminants', 'contaminants')
 
 hdu_list = fits.open(GMM_params['path']+'/'+GMM_params['table_name'], memmap=True)
 output = Table(hdu_list[1].data)
