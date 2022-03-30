@@ -52,7 +52,7 @@ def make_gif(name, save_name):
     images = [imageio.imread(file) for file in files]
     imageio.mimwrite(folder+save_name+'.gif', images, fps=1.5)
 
-def plot_mag_distribution_data(bin_mp,hist,area,popt,xc,spl,limits,extension_name='data'):
+def plot_mag_distribution_data(bin_mp,hist,area,popt,xc,spl,limits,ylimits,extension_name='data'):
     """ Plot the mag distribution
 
         Args:
@@ -63,6 +63,7 @@ def plot_mag_distribution_data(bin_mp,hist,area,popt,xc,spl,limits,extension_nam
             xc (float): the incompleteness magnitude value
             spl (spline function): the spline used to interpolate the distribution
             limits (list, shape nx2): the ranges to plot
+            ylimits (list, shape nx2): the range to plot in the y-axis
             extension_name (string): the specific name of the plot
         """
     create_fig_folder()
@@ -89,7 +90,7 @@ def plot_mag_distribution_data(bin_mp,hist,area,popt,xc,spl,limits,extension_nam
     spline= np.array([spl(x_inter[i]) for i in range(len(x_inter))])
     ax.plot(x_inter, powerl, 'r-', markersize=5, linewidth=4, label=extension_name)
     ax.set_xlim(limits)
-    ax.set_ylim([1e-1, 5e3])
+    ax.set_ylim(ylimits)
     ax.legend(loc='upper left', fontsize='35')
     plt.tight_layout()
     fig.savefig('figs/'+extension_name+'_mag_distribution.pdf')
@@ -119,5 +120,5 @@ def plot_prob_hist(prob, bins=100, label='', extension_name='data'):
     ax.set_yscale('log')
     ax.legend(loc='upper right', fontsize='35')
     plt.tight_layout()
-    fig.savefig('figures/'+extension_name+'_prob_hist.pdf')
+    fig.savefig('figs/'+extension_name+'_prob_hist.pdf')
     plt.close()

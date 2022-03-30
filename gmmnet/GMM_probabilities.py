@@ -27,15 +27,18 @@ def _create_prob_folder():
         print("Creating the directory: probabilities")
         os.mkdir(path + '/probabilities')
 
-def interpolate_number_counts(ref_mag, area, bins=10, range=[17, 23], x_incom=[20, 20.5], name='data'):
+def interpolate_number_counts(ref_mag, prior_mag, area, bins=10, range=[17, 23], x_incom=[20, 20.5], ylimits=[1e-1,5e3],
+                              name='data'):
     """ Fit the number count distribution using a broken power-law
 
         Args:
-            ref_mag (nparray): this is the mag array
+            ref_mag (nparray): this is the mag array used to evaluate the prior curve
+            prior_mag (nparray): this is the mag array used to compute the priors
             area: area of the survey used to normalize
             bins (int): number of bins to compute the number counts
             range (list, shape nx2): the interpolation range
             x_incom (list, shape nx2): the range from where to derive the incompleteness
+            ylimits (list, shape nx2): the range to plot in the y-axis
             name (string): the name of the plot of the distribution
         """
     hist, bin_edges = np.histogram(ref_mag, bins=bins,range=range)
@@ -62,9 +65,9 @@ def interpolate_number_counts(ref_mag, area, bins=10, range=[17, 23], x_incom=[2
     spl = interpolate.interp1d(bin_mp, hist/area, kind='cubic', fill_value="extrapolate")
 
     # Plot the distribution
-    plot_mag_distribution_data(bin_mp, hist, area, popt, x_incom[0], spl, range, extension_name=name)
+    plot_mag_distribution_data(bin_mp, hist, area, popt, x_incom[0], spl, range, ylimits=ylimits, extension_name=name)
 
-    prior_prob = np.array([_prior(mag, popt, spl, x_incom[0]) for mag in ref_mag])
+    prior_prob = np.array([_prior(mag, popt, spl, x_incom[0]) for mag in prior_mag])
 
     return prior_prob
 
