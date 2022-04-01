@@ -187,7 +187,7 @@ class GMM:
                 train_loss = 0
                 for i, (ref_f_i, data_i, data_err_i) in enumerate(train_loader):
                     optimizer.zero_grad()
-                    log_prob_b, loss = gmm.score(data_i, ref_f_i, noise=data_err_i, regression=True)
+                    loss = gmm.loss(data_i, ref_f_i, noise=data_err_i, regression=True)
                     train_loss += loss
                     # backward and update parameters
                     loss.backward()
@@ -202,7 +202,7 @@ class GMM:
                 val_loss = 0
                 for i, (ref_f_i, data_i, data_err_i) in enumerate(valid_loader):
                     optimizer.zero_grad()
-                    log_prob_b, loss = gmm.score(data_i, ref_f_i, noise=data_err_i)
+                    loss = gmm.loss(data_i, ref_f_i, noise=data_err_i, regression=True)
                     val_loss += loss
 
                 val_loss = val_loss / size_val
@@ -233,7 +233,7 @@ class GMM:
         best_model.eval()
         tes_loss = 0
         for i, (ref_f_i, data_i, rel_err_i) in enumerate(test_loader):
-            log_prob_b, loss = best_model.score(data_i, ref_f_i, noise=rel_err_i)
+            loss = best_model.loss(data_i, ref_f_i, noise=rel_err_i, regression=True)
             tes_loss += loss
 
         tes_loss = tes_loss / self.size_test

@@ -99,13 +99,10 @@ class GMMNet(nn.Module):
         return l.sum(axis=(-1,-2))
     
 
-    def log_prob_b(self, data, conditional, noise=None):
-
-        weights, means, covars = self.forward(conditional)
+    def log_prob_GMM(self, data, weights, means, covars, noise=None):
 
         if noise is None:
             noise = torch.zeros_like(covars)
-        #elif noise.dim() != covars.dim():  
         else:
             noise = noise[:, None, ...]  # add noise to all components
 
@@ -115,35 +112,33 @@ class GMMNet(nn.Module):
         
         log_resp += torch.log(weights)
 
-        log_prob_b = torch.logsumexp(log_resp, dim=1)
+        log_prob_GMM = torch.logsumexp(log_resp, dim=1)
 
-        return log_prob_b
+        return log_prob_GMM
 
 
-    def score(self, data, conditional, noise=None, regression=False):
+    def log_prob_conditional(self, data, conditional, noise=None):
 
         weights, means, covars = self.forward(conditional)
 
-        if noise is None:
-            noise = torch.zeros_like(covars)
-        # elif noise.dim() != covars.dim():
-        else:
-            noise = noise[:, None, ...]  # add noise to all components
+        log_prob = self.log_prob_GMM(data, weights, means, covars, noise=noise)
 
-        noisy_covars = covars + noise
+        
+        return log_prob
+        
 
-        log_resp = mvn(loc=means, covariance_matrix=noisy_covars).log_prob(data[:, None, :])
+    def loss(self, data, conditional, noise=None, regression=False):
 
-        log_resp += torch.log(weights)
+        weights, means, covars = self.forward(conditional)
 
-        log_prob_b = torch.logsumexp(log_resp, dim=1)
+        log_prob_b = self.log_prob_GMM(data, weights, means, covars, noise=noise)
         
         if regression is False:
             train_loss = (-log_prob_b).sum()
         else:
             train_loss = (-log_prob_b + self.reg_loss(covars)).sum()
 
-        return log_prob_b, train_loss
+        return train_loss
 
 
     def sample(self, conditional, n_per_conditional=1, noise=None):
@@ -152,7 +147,7 @@ class GMMNet(nn.Module):
 
         batchsize = conditional.shape[0]
         draw = list(WeightedRandomSampler(weights, n_per_conditional))
-        means  = means[:, draw][torch.eye(batchsize).to(torch.bool)]
+        means = means[:, draw][torch.eye(batchsize).to(torch.bool)]
         covars = covars[:, draw][torch.eye(batchsize).to(torch.bool)]
 
         if noise is None:
@@ -160,8 +155,8 @@ class GMMNet(nn.Module):
         elif noise.dim() != covars.dim():  
             noise = noise[:, None, ...]  # add noise to all components
         
-
         noisy_covars = covars + noise
+        
         data = mvn(loc=means, covariance_matrix=noisy_covars).sample()
 
         return data

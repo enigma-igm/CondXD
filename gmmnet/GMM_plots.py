@@ -105,7 +105,7 @@ def plot_prob_hist(prob, bins=100, label='', extension_name='data'):
             extension_name (string): the label to show in the histogram
             extension_name (string): the specific name of the plot
         """
-    fig=plt.figure(num=None, figsize=(15, 10))
+    fig = plt.figure(num=None, figsize=(15, 10))
     ax = plt.subplot(1, 1, 1)
     ax.tick_params(axis='both', which='minor', direction='in', length=5, labelsize=30, width=4)
     ax.tick_params(axis='both', which='major', direction='in', length=10, labelsize=30, width=4)

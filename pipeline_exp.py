@@ -69,7 +69,7 @@ for seed in seed_list:
             train_loss = 0
             for i, (cond_i, data_i, noise_i) in enumerate(train_loader):
                 optimizer.zero_grad()
-                log_prob_b, loss = gmm.score(data_i, cond_i, noise=noise_i)
+                log_prob_b, loss = gmm.score(data_i, cond_i, noise=noise_i, regression=True)
                 train_loss += loss
 
                 # backward and update parameters
@@ -86,7 +86,7 @@ for seed in seed_list:
             val_loss = 0
             for i, (cond_i, data_i, noise_i) in enumerate(valid_loader):
                 optimizer.zero_grad()
-                log_prob_b, loss = gmm.score(data_i, cond_i, noise=noise_i)
+                log_prob_b, loss = gmm.score(data_i, cond_i, noise=noise_i, regression=True)
                 val_loss += loss
             
             val_loss = val_loss / N_v

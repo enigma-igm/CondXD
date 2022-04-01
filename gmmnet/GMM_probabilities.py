@@ -88,7 +88,7 @@ def log_prob_computation(GMM_params, hyper_params, model_name, table_name, overw
     best_model = model.GMMNet(XD.n_gauss, XD.rel_flux.shape[1], conditional_dim=1)
     best_model.load_state_dict(torch.load('XD_fit_models/{}.pkl'.format(model_name)))
     best_model.eval()
-    log_prob_dens = best_model.log_prob_b(XD.rel_flux, XD.ref_f, noise=XD.rel_flux_err).detach().numpy()
+    log_prob_dens = best_model.log_prob_conditional(XD.rel_flux, XD.ref_f, noise=XD.rel_flux_err).detach().numpy()
 
     # Save the computed probabilities
     idx = np.linspace(1, len(log_prob_dens), len(log_prob_dens))
