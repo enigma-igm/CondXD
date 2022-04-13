@@ -126,10 +126,12 @@ def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=
     import corner
     if noisy == False:
         name = 'clean'
-        tag = 'Deconvolved'
+        label_real = 'Truth'
+        label_prediction = 'Deconvolved'
     elif noisy == True:
         name = 'noisy'
-        tag = 'Noise Convolved'
+        label_real = 'Reconvolved Truth'
+        label_prediction = 'Reconvolved'
     D = data_r.shape[-1]
 
     figure = corner.corner(data_r, bins=nbins, range=ranges,
@@ -144,9 +146,9 @@ def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=
         ax.tick_params(axis='both', direction='in', labelsize=12)
     
     # setting annotates
-    axes[1, -3].text(0.6, 0.8, tag+' Real Model, cond $\mathbf{c}$'+f'={conditional:.2f}',
+    axes[1, -3].text(0.6, 0.8, label_real+', cond $\mathbf{c}$'+f'={conditional:.2f}',
                     fontsize=25, horizontalalignment='center', c='k', weight='bold')
-    axes[1, -3].text(0.6, 0.5, tag+f' Prediction',
+    axes[1, -3].text(0.6, 0.5, label_prediction+f' Fitted',
                     fontsize=25, horizontalalignment='center', c='tab:red', weight='bold')
     figure.savefig(path+name+f'Comp_{conditional:.2f}.pdf')
 
@@ -213,21 +215,21 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
         covars_p_i  = covars_p[bin_filter]
 
         # for the deconvolved model
-        logp_r_clean = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i), 
+        logp_r_clean = CondXD.log_prob_GMM(torch.FloatTensor(data_r_clean_i), 
                                         weights_r_i, means_r_i, covars_r_i).detach().numpy()
-        logp_p_clean = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i),
+        logp_p_clean = CondXD.log_prob_GMM(torch.FloatTensor(data_r_clean_i),
                                         weights_p_i, means_p_i, covars_p_i).detach().numpy()
         KL_div_clean[i] = (logp_r_clean - logp_p_clean).mean()
 
         # for the noise convolved model
-        logp_r_noisy = CondXD.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
+        logp_r_noisy = CondXD.log_prob_GMM(torch.FloatTensor(data_r_noisy_i), 
                                         weights_r_i, means_r_i, covars_r_i, noise=noise_i).detach().numpy()
-        logp_p_noisy = CondXD.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
+        logp_p_noisy = CondXD.log_prob_GMM(torch.FloatTensor(data_r_noisy_i), 
                                         weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
         KL_div_noisy[i] = (logp_r_noisy - logp_p_noisy).mean()
 
         # probability of deconvolved samples on noise convolved model
-        logp_p_maxim = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i),
+        logp_p_maxim = CondXD.log_prob_GMM(torch.FloatTensor(data_r_clean_i),
                                         weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
         KL_div_maxim[i] = (logp_r_clean - logp_p_maxim).mean()
 
@@ -239,17 +241,17 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
             covars_p_i  = torch.FloatTensor(binXD[i].V)
             
             # for the deconvolved model
-            logp_p_clean = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i),
+            logp_p_clean = CondXD.log_prob_GMM(torch.FloatTensor(data_r_clean_i),
                                             weights_p_i, means_p_i, covars_p_i).detach().numpy()
             KL_div_bin_clean[i] = (logp_r_clean - logp_p_clean).mean()
 
             # for the noise convolved model
-            logp_p_noisy = CondXD.log_prob_b(torch.FloatTensor(data_r_noisy_i), 
+            logp_p_noisy = CondXD.log_prob_GMM(torch.FloatTensor(data_r_noisy_i), 
                                             weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
             KL_div_bin_noisy[i] = (logp_r_noisy - logp_p_noisy).mean()
 
             # probability of deconvolved samples on noise convolved model
-            logp_p_maxim = CondXD.log_prob_b(torch.FloatTensor(data_r_clean_i),
+            logp_p_maxim = CondXD.log_prob_GMM(torch.FloatTensor(data_r_clean_i),
                                         weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
             KL_div_bin_maxim[i] = (logp_r_clean - logp_p_maxim).mean()
             
@@ -258,21 +260,21 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
     # figure. KL divergence vs conditional
     fig, ax = plt.subplots()
     cond_axis = cond_bin_edges.mean(axis=-1)
-    linetypes = ['$D_\mathrm{KL}(\mathrm{noisy\ truth} \| \mathrm{reconvolved\ fitted})$',
-                '$D_\mathrm{KL}(\mathrm{truth} \| \mathrm{deconvolved\ fitted})$',
+    linetypes = ['$D_\mathrm{KL}(\mathrm{truth} \| \mathrm{deconvolved\ fitted})$',
+                '$D_\mathrm{KL}(\mathrm{noisy\ truth} \| \mathrm{reconvolved\ fitted})$',
                 'Estimated Max $D_\mathrm{KL}$']
     methods   = ['', '']
     if binXD is not None:
         methods = [', CondXD', ', bin-XD']
     
-    ax.plot(cond_axis, KL_div_noisy, label=linetypes[0]+methods[0], linestyle='solid', color='tab:red')
-    ax.plot(cond_axis, KL_div_clean, label=linetypes[1]+methods[0], linestyle='dashed', color='tab:red')
+    ax.plot(cond_axis, KL_div_clean, label=linetypes[0]+methods[0], linestyle='solid', color='tab:red')
+    ax.plot(cond_axis, KL_div_noisy, label=linetypes[1]+methods[0], linestyle='dashed', color='tab:red')
     ax.plot(cond_axis, KL_div_maxim, label=linetypes[2]+methods[0], linestyle='-.', color='tab:red')
     ax.legend(fontsize=10, frameon=False)
 
     if binXD is not None:
-        ax.plot(cond_axis, KL_div_bin_noisy, label=linetypes[0]+methods[1], linestyle='solid', color='tab:blue')
-        ax.plot(cond_axis, KL_div_bin_clean, label=linetypes[1]+methods[1], linestyle='dashed', color='tab:blue')
+        ax.plot(cond_axis, KL_div_bin_clean, label=linetypes[0]+methods[1], linestyle='solid', color='tab:blue')
+        ax.plot(cond_axis, KL_div_bin_noisy, label=linetypes[1]+methods[1], linestyle='dashed', color='tab:blue')
         # not do maximum estimation of bin-XD
         ax.legend(fontsize=10, frameon=False)
     ax.set_xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
@@ -284,12 +286,12 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
     plt.close()
 
     KL_div = {}
-    KL_div['noisy'] = KL_div_noisy
     KL_div['clean'] = KL_div_clean
+    KL_div['noisy'] = KL_div_noisy
     KL_div['maxim'] = KL_div_maxim
     if binXD is not None:
-        KL_div['noisy_binXD'] = KL_div_bin_noisy
         KL_div['clean_binXD'] = KL_div_bin_clean
+        KL_div['noisy_binXD'] = KL_div_bin_noisy
         KL_div['maxim_binXD'] = KL_div_bin_maxim
 
     return KL_div
@@ -371,12 +373,12 @@ def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_
         label = [f'Dim. {i+1}' for i in range(D)]
         bins = 25
 
-        # cornerplots clean
+        # cornerplots noisy
         conditional = cond[j][0]
-        figure = density_comp(data_r_clean, data_p_clean, label, bins, conditional, noisy=False, path=path)
-        # conerplots nosiy
+        figure = density_comp(data_r_noisy, data_p_noisy, label, bins, conditional, noisy=True, path=path)
+        # conerplots clean
         ranges = get_ranges(figure)
-        figure = density_comp(data_r_noisy, data_p_noisy, label, bins, conditional, noisy=True, path=path,
+        figure = density_comp(data_r_clean, data_p_clean, label, bins, conditional, noisy=False, path=path,
                                 ranges=ranges)
         del figure
 

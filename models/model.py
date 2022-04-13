@@ -134,11 +134,11 @@ class GMMNet(nn.Module):
         log_prob_b = self.log_prob_GMM(data, weights, means, covars, noise=noise)
         
         if regression is False:
-            train_loss = (-log_prob_b).sum()
+            loss = (-log_prob_b).sum()
         else:
-            train_loss = (-log_prob_b + self.reg_loss(covars)).sum()
+            loss = (-log_prob_b + self.reg_loss(covars)).sum()
 
-        return train_loss
+        return loss
 
 
     def sample(self, conditional, n_per_conditional=1, noise=None):

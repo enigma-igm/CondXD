@@ -1,9 +1,10 @@
-from data.experiment import *
-from models.model import *
+from data.experiment import data_load
+from models.model import GMMNet
 from diagnostics.plots_exp import exp_figures
 
 from xdgmm import XDGMM
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -11,6 +12,19 @@ import copy
 import os
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
+hyper_params = {
+    "learning_rate": 1e-3,
+    "batch_size": 500,
+    "schedule_factor": 0.4,
+    "patience": 2,
+    "num_epoch": 100,
+    "weight_decay": 0.001,
+    "size_training": 80,
+    "size_validation": 20,
+    "size_testing": 0,
+    "n_gauss": 20
+}
 
 # components, dimension of data, and dimension of conditional
 K, D, D_cond = 10, 7, 1
@@ -26,28 +40,35 @@ cond_bin_edges_r = np.linspace(0, 1, num=n_bin, endpoint=False) + 1/n_bin
 cond_bin_edges = np.array([cond_bin_edges_l, cond_bin_edges_r]).transpose()
 
 # load training and validation data and parameters
-seed_list = [9, 11, 13, 15, 17, 19, 21, 23, 25, 26]
+seed_list = [9, 11, 13, 15, 17, 19, 21, 23, 25, 27]
 KL_div_list = np.array([])
 for seed in seed_list:
-    cond_t, _, _, _, data_t, noise_t, _ = data_load(N_t, K, D, D_cond, noisy=True, seed0=seed)
-    cond_v, _, _, _, data_v, noise_v, _ = data_load(N_v, K, D, D_cond, noisy=True, seed0=seed)
+    cond_t, _, _, _, data_t, noise_t, _ = data_load(N_t, K, D, D_cond,
+                                                    noisy=True, seed0=seed)
+    cond_v, _, _, _, data_v, noise_v, _ = data_load(N_v, K, D, D_cond, 
+                                                    noisy=True, seed0=seed)
+
+    cond_t = torch.FloatTensor(cond_t)
+    data_t = torch.FloatTensor(data_t)
+    noise_t = torch.FloatTensor(noise_t)
+    cond_v = torch.FloatTensor(cond_v)
+    data_v = torch.FloatTensor(data_v)
+    noise_v = torch.FloatTensor(noise_v)
 
 
-    # initialization
-    K_GMM = K
-    gmm = GMMNet(K, D, D_cond)
-
-    learning_rate = 1e-3
-    optimizer = torch.optim.Adam(gmm.parameters(), lr=learning_rate, weight_decay=0.001)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.4, patience=2)
-
-
-    # training process
     # put data into batches
     batch_size = 250
 
     train_loader = DataLoader(TensorDataset(cond_t, data_t, noise_t), batch_size=batch_size, shuffle=True)
     valid_loader = DataLoader(TensorDataset(cond_v, data_v, noise_v), batch_size=batch_size, shuffle=True)
+
+    # initialization
+    K_GMM = K
+    CondXD = GMMNet(K, D, D_cond)
+
+    learning_rate = 1e-3
+    optimizer = torch.optim.Adam(CondXD.parameters(), lr=learning_rate, weight_decay=0.001)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.4, patience=2)
 
 
     # NN parameter (weights) save directory
@@ -57,19 +78,19 @@ for seed in seed_list:
         print("Directory ", param_path , " created ")
     
     # training loop
-    epoch = 200
+    epoch = 100
     lowest_loss = 9999
-    best_model  = copy.deepcopy(gmm)
-    train_loss_list = np.nans(epoch)
-    valid_loss_list = np.nans(epoch)
+    best_model  = copy.deepcopy(CondXD)
+    train_loss_list = np.ones(epoch) * np.nan
+    valid_loss_list = np.ones(epoch) * np.nan
     for n in range(epoch):
         try:
             # training
-            gmm.train()
+            CondXD.train()
             train_loss = 0
             for i, (cond_i, data_i, noise_i) in enumerate(train_loader):
                 optimizer.zero_grad()
-                log_prob_b, loss = gmm.score(data_i, cond_i, noise=noise_i, regression=True)
+                loss = CondXD.loss(data_i, cond_i, noise=noise_i, regression=True)
                 train_loss += loss
 
                 # backward and update parameters
@@ -77,24 +98,24 @@ for seed in seed_list:
                 optimizer.step()
             
             train_loss = train_loss / N_t
-            train_loss_list[i] = train_loss
+            train_loss_list[n] = train_loss
             print('Epoch', (n+1), 'Training loss', train_loss.item())
             scheduler.step(train_loss)
 
             # validation
-            gmm.eval()
+            CondXD.eval()
             val_loss = 0
             for i, (cond_i, data_i, noise_i) in enumerate(valid_loader):
                 optimizer.zero_grad()
-                log_prob_b, loss = gmm.score(data_i, cond_i, noise=noise_i, regression=True)
+                loss = CondXD.loss(data_i, cond_i, noise=noise_i, regression=True)
                 val_loss += loss
             
             val_loss = val_loss / N_v
-            valid_loss_list[i] = val_loss
+            valid_loss_list[n] = val_loss
             print('Epoch', (n+1), 'Validation loss', val_loss.item())
             if val_loss < lowest_loss:
                 lowest_loss = val_loss
-                best_model  = copy.deepcopy(gmm)
+                best_model  = copy.deepcopy(CondXD)
                 torch.save(best_model.state_dict(),
                             param_path+'params.pkl')
 
@@ -107,7 +128,7 @@ for seed in seed_list:
     xd_list = np.array([])
     weights_last = mu_last = V_last = None
     for i in range(n_bin):
-        print(f'Bin-GMM: processing bin {i+1}/{n_bin}...')
+        print(f'Bin-XD: processing bin {i+1}/{n_bin}...')
         xd = XDGMM(K, method='Bovy', weights=weights_last, mu=mu_last, V=V_last)
 
         bin_filter = (cond_t <= cond_bin_edges[i,1]) & (cond_t > cond_bin_edges[i,0])
@@ -145,12 +166,12 @@ if xd_list is not None:
     n_type = 6
 KL_div_np = np.zeros((len(seed_list), n_type, len(cond)))
 for i, KL in enumerate(KL_div_list):
-    KL_div_np[i][0] = KL['noisy']
-    KL_div_np[i][1] = KL['clean']
+    KL_div_np[i][0] = KL['clean']
+    KL_div_np[i][1] = KL['noisy']
     KL_div_np[i][2] = KL['maxim']
     if xd_list is not None:
-        KL_div_np[i][3] = KL['noisy_binXD']
-        KL_div_np[i][4] = KL['clean_binXD']
+        KL_div_np[i][3] = KL['clean_binXD']
+        KL_div_np[i][4] = KL['noisy_binXD']
 KL_div_mean = KL_div_np.mean(axis=0)
 KL_div_std  = KL_div_np.std(axis=0)
 
@@ -160,8 +181,8 @@ plt.close('all')
 
 fig, ax = plt.subplots()
 
-linetypes = ['$D_\mathrm{KL}$(noisy truth | reconvolved fitted)',
-            '$D_\mathrm{KL}$(truth | deconvolved fitted)',
+linetypes = ['$D_\mathrm{KL}$(truth | deconvolved fitted)',
+            '$D_\mathrm{KL}$(noisy truth | reconvolved fitted)',
             'Estimated Max $D_\mathrm{KL}$']
 linestyles = ['solid', 'dashed', '-.']
 methods = ['', '']
