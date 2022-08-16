@@ -38,7 +38,7 @@ def cornerplots(data_tes, output_tes, labels, bins, ranges, anno, name, noisy=Fa
         tag = 'Deconvolved'
     if noisy is True:
         tag = 'Reconvolved'
-    axes[1, -3].text(0.6, 0.8, f'Samples on NN ({tag})', c='r',
+    axes[1, -3].text(0.6, 0.8, f'Samples on Conditional XD ({tag})', c='r',
                 fontsize=20, horizontalalignment='center', weight='bold')
     if noisy is False:
         tag = 'clean'

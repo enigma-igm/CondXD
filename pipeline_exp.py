@@ -181,8 +181,13 @@ plt.close('all')
 
 fig, ax = plt.subplots()
 
-linetypes = ['$D_\mathrm{KL}$(truth | deconvolved fitted)',
-            '$D_\mathrm{KL}$(noisy truth | reconvolved fitted)',
+'''
+linetypes = ['$D_\mathrm{KL}$(underlying | deconvolved fitted)',
+            '$D_\mathrm{KL}$(noisy underlying | reconvolved fitted)',
+            'Estimated Max $D_\mathrm{KL}$']
+'''
+linetypes = ['$D_\mathrm{KL, deconvolved}$',
+            '$D_\mathrm{KL, reconvolved}$',
             'Estimated Max $D_\mathrm{KL}$']
 linestyles = ['solid', 'dashed', '-.']
 methods = ['', '']
