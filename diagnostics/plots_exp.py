@@ -22,8 +22,8 @@ def loss_in_process(train_loss_list, valid_loss_list, fig_path):
 def weights_comp(cond, weights_r, weights_p, path):
     K = weights_r.shape[-1]
     fig, ax = plt.subplots()
-    pw_r = ax.plot(cond.flatten(), weights_r, color='black', label='Real')
-    pw_p = ax.plot(cond.flatten(), weights_p, color='tab:red', label='Predicted')
+    pw_r = ax.plot(cond.flatten(), weights_r, color='black', label='Underlying')
+    pw_p = ax.plot(cond.flatten(), weights_p, color='tab:red', label='estimated')
     ax.set_xlabel(r'Conditional $\mathbf{c}$', fontsize=14)
     ax.set_ylabel(r'Weights', fontsize=14)
     ax.set_title(f'Weights of {K} Components', fontsize=16)
@@ -53,9 +53,9 @@ def means_comp(cond, means_r, means_p, path):
         lc.set_linewidth(2)
         line = ax.add_collection(lc)
     cbar = plt.colorbar(line, ax=ax, aspect=15)
-    cbar.set_label(r'Real vs Conditional $\mathbf{c}$', fontsize=14)
+    cbar.set_label(r'Underlying vs Conditional $\mathbf{c}$', fontsize=14)
 
-    # means of the NN predicted model
+    # means of the NN estimated model
     for i in range(K):
         points = means_p[:,i,:].reshape(-1, 1, D)[:,:,0:2]
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
@@ -65,7 +65,7 @@ def means_comp(cond, means_r, means_p, path):
         lc.set_linewidth(2)
         line = ax.add_collection(lc)      
     cbar = plt.colorbar(line, ax=ax, aspect=15)
-    cbar.set_label(r'Predicted vs Conditional $\mathbf{c}$', fontsize=14)
+    cbar.set_label(r'Estimated vs Conditional $\mathbf{c}$', fontsize=14)
 
     ax.set_xlim(means_p[:,:,0].min()-0.5, means_p[:,:,0].max()+0.5)
     ax.set_ylim(means_p[:,:,1].min()-0.5, means_p[:,:,1].max()+0.5)
@@ -85,8 +85,8 @@ def covars_comp(cond, covars_r, covars_p, num, path):
     fig, ax = plt.subplots(num, 1, figsize=(6,num*1.7), sharex=True)
     fig.subplots_adjust(hspace=0)
     for i in range(num):
-        pde_r = ax[i].plot(cond, covars_r[:,:,i,i], color='black', label='Real')
-        pde_p = ax[i].plot(cond, covars_p[:,:,i,i], color='tab:red', label='Predicted')
+        pde_r = ax[i].plot(cond, covars_r[:,:,i,i], color='black', label='Underlying')
+        pde_p = ax[i].plot(cond, covars_p[:,:,i,i], color='tab:red', label='Estimated')
         ax[i].set_ylabel(f'{i+1, i+1} Element')
         ax[i].set_ylim([0, 0.4])
         ax[i].set_yticks(np.arange(0, 0.4, 0.1))
@@ -126,11 +126,11 @@ def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=
     import corner
     if noisy == False:
         name = 'clean'
-        label_real = 'Truth'
+        label_real = 'Underlying'
         label_prediction = 'Deconvolved'
     elif noisy == True:
         name = 'noisy'
-        label_real = 'Reconvolved Truth'
+        label_real = 'Reconvolved Underlying'
         label_prediction = 'Reconvolved'
     D = data_r.shape[-1]
 
@@ -148,7 +148,7 @@ def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=
     # setting annotates
     axes[1, -3].text(0.6, 0.8, label_real+', cond $\mathbf{c}$'+f'={conditional:.2f}',
                     fontsize=25, horizontalalignment='center', c='k', weight='bold')
-    axes[1, -3].text(0.6, 0.5, label_prediction+f' Fitted',
+    axes[1, -3].text(0.6, 0.5, label_prediction+f' Estimated',
                     fontsize=25, horizontalalignment='center', c='tab:red', weight='bold')
     figure.savefig(path+name+f'Comp_{conditional:.2f}.pdf')
 
@@ -260,8 +260,8 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
     # figure. KL divergence vs conditional
     fig, ax = plt.subplots()
     cond_axis = cond_bin_edges.mean(axis=-1)
-    linetypes = ['$D_\mathrm{KL}(\mathrm{truth} \| \mathrm{deconvolved\ fitted})$',
-                '$D_\mathrm{KL}(\mathrm{noisy\ truth} \| \mathrm{reconvolved\ fitted})$',
+    linetypes = ['$D_\mathrm{KL}(\mathrm{underlying} \| \mathrm{deconvolved\ estimated})$',
+                '$D_\mathrm{KL}(\mathrm{noisy\ underlying} \| \mathrm{reconvolved\ estimated})$',
                 'Estimated Max $D_\mathrm{KL}$']
     methods   = ['', '']
     if binXD is not None:
@@ -333,7 +333,7 @@ def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_
         means_r[i] = means_func(cond[i], K, D, seed=seed+4)
         covars_r[i] = covar_func(cond[i], K, D, seed=seed+12)
 
-    # p for predicted. predicted GMM parameters.
+    # p for estimated. estimated GMM parameters.
     weights_p, means_p, covars_p = model(torch.FloatTensor(cond))
     weights_p = weights_p.detach().numpy()
     means_p   = means_p.detach().numpy()

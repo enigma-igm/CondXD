@@ -210,7 +210,6 @@ if xd_list is not None:
 ax.set_xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
 ax.set_xlabel('Conditional c', fontsize=14)
 ax.set_ylabel('$D_\mathrm{KL}$', fontsize=14)
-ax.set_title('KL Divergence vs Conditional', fontsize=16)
 fig.savefig('figs/experiment/KLDiv_mean.pdf')
 plt.show()
 
