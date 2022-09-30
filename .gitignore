@@ -1,2 +1,5 @@
 .DS_Store
 ignore/
+data/bin_edges_stars.fits
+data/UKIDSS_catalog_z7_training_subsample_clean.fits
+data/VIKING_catalog.fits

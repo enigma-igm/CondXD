@@ -1,7 +1,7 @@
 from data.experiment import data_load
 from models.model import GMMNet
 from diagnostics.plots_exp import exp_figures
-
+# export PYTHONPATH="${PYTHONPATH}:../extreme-deconvolution/py"
 from xdgmm import XDGMM
 
 import numpy as np

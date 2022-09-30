@@ -12,7 +12,7 @@ def loss_in_process(train_loss_list, valid_loss_list, fig_path):
     ax.plot(range(len(train_loss_list)), valid_loss_list, label='validation loss', color='tab:red', linestyle='dashed')
     ax.set_xlabel('Training Epoch', fontsize=14)
     ax.set_ylabel('Loss', fontsize=14)
-    ax.legend(fontsize=10)
+    ax.legend(fontsize=14, frameon=False)
     fig.savefig(fig_path+'loss.pdf')
     
     plt.close()
@@ -126,12 +126,12 @@ def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=
     import corner
     if noisy == False:
         name = 'clean'
-        label_real = 'Underlying'
+        label_real = 'Noiseless Underlying'
         label_prediction = 'Deconvolved'
     elif noisy == True:
         name = 'noisy'
-        label_real = 'Reconvolved Underlying'
-        label_prediction = 'Reconvolved'
+        label_real = 'Noisy Underlying'
+        label_prediction = 'Noisy'
     D = data_r.shape[-1]
 
     figure = corner.corner(data_r, bins=nbins, range=ranges,
@@ -148,9 +148,48 @@ def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=
     # setting annotates
     axes[1, -3].text(0.6, 0.8, label_real+', cond $\mathbf{c}$'+f'={conditional:.2f}',
                     fontsize=25, horizontalalignment='center', c='k', weight='bold')
-    axes[1, -3].text(0.6, 0.5, label_prediction+f' Estimated',
+    axes[1, -3].text(0.6, 0.5, label_prediction+f' Estimation',
                     fontsize=25, horizontalalignment='center', c='tab:red', weight='bold')
     figure.savefig(path+name+f'Comp_{conditional:.2f}.pdf')
+
+    return figure
+
+# density comparison plot
+def deconv_comp(data_r, data_p, label, nbins, conditional, path, ranges=None):
+    """[summary]
+
+    Args:
+        data_r ([type]): [description]
+        data_p ([type]): [description]
+        label ([type]): [description]
+        bins ([type]): [description]
+        conditional ([type]): [description]
+        noisy (bool): [description].
+    """
+
+    import corner
+    label_real = 'Noisy Underlying'
+    label_prediction = 'Deconvolved'
+    
+    D = data_r.shape[-1]
+
+    figure = corner.corner(data_r, bins=nbins, range=ranges,
+                        color='black', labels=label, label_kwargs=dict(fontsize=16))
+    if ranges is None:
+        ranges = get_ranges(figure) # keeping the same range and bins
+    corner.corner(data_p, bins=nbins, range=ranges, fig=figure, 
+                        color='tab:red', labels=label, label_kwargs=dict(fontsize=16), alpha=0.7)
+    
+    axes = np.array(figure.axes).reshape(D, D)
+    for ax in figure.get_axes():
+        ax.tick_params(axis='both', direction='in', labelsize=12)
+    
+    # setting annotates
+    axes[1, -3].text(0.6, 0.8, label_real+', cond $\mathbf{c}$'+f'={conditional:.2f}',
+                    fontsize=25, horizontalalignment='center', c='k', weight='bold')
+    axes[1, -3].text(0.6, 0.5, label_prediction+f' Estimation',
+                    fontsize=25, horizontalalignment='center', c='tab:red', weight='bold')
+    figure.savefig(path+f'deconvComp_{conditional:.2f}.pdf')
 
     return figure
 
@@ -379,6 +418,8 @@ def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_
         # conerplots clean
         ranges = get_ranges(figure)
         figure = density_comp(data_r_clean, data_p_clean, label, bins, conditional, noisy=False, path=path,
+                                ranges=ranges)
+        figure = deconv_comp(data_r_noisy, data_p_clean, label, bins, conditional, path=path,
                                 ranges=ranges)
         del figure
 
