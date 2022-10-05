@@ -38,6 +38,7 @@ class GMM:
         self.size_val = hyper_params.get("size_validation", 15)
         self.size_test = hyper_params.get("size_testing", 15)
         self.n_gauss = hyper_params.get("n_gauss", 20)
+        self.conditional_dim = hyper_params.get("conditional_dim", 1)
 
         # Check that the fraction training, validation, and testing samples sum up to 100
         if (self.size_train+self.size_val+self.size_test) != 100:
@@ -52,7 +53,11 @@ class GMM:
         flux = np.array([output[GMM_params['fluxes'][i]] for i in range(len(GMM_params['fluxes']))])
         flux_err = np.array([output[GMM_params['fluxes_err'][i]] for i in range(len(GMM_params['fluxes_err']))])
         ref_f = output[GMM_params['ref_flux']].astype('float').reshape(-1, 1)
+        self.classif = GMM_params.get("class", "contaminants")
         ref_f_err = output[GMM_params['ref_flux_err']].astype('float').reshape(-1, 1)
+        if self.conditional_dim == 2:
+            redshift = output[GMM_params['redshift']].astype('float').reshape(-1, 1)
+            self.redshift = torch.Tensor(redshift)
         hdu_list.close()
 
         self.rel_flux = torch.Tensor(flux/ref_f.T).transpose(1, 0)
@@ -61,6 +66,12 @@ class GMM:
         self.ref_f = torch.log(ref_f)
         self.ref_f_err = torch.Tensor(ref_f_err)
         self.rel_flux_err = self._get_noise_covar(flux_err, ref_f, low_SN_mag=low_SN_mag)
+
+        if self.classif in "qso":
+            self.rel_flux = torch.Tensor(np.random.normal(self.rel_flux, 0.01))
+            diag = np.arange(self.rel_flux.shape[1])
+            self.rel_flux_err = torch.Tensor(np.zeros_like(self.rel_flux_err))
+            self.rel_flux_err[:, diag, diag] = 0.01
 
         self._real_size()
 
@@ -115,7 +126,7 @@ class GMM:
         self.id_sep = id_sep
 
     def sample_splitting(self, sample='training'):
-        """ Create the sample corresponding to the define parameter
+        """ Create the sample corresponding to the defined parameter
 
         :param sample:
 
@@ -137,11 +148,17 @@ class GMM:
         data = self.rel_flux[self.id_sep == asign]
         data_err = self.rel_flux_err[self.id_sep == asign]
         ref_f = self.ref_f[self.id_sep == asign]
+        if self.conditional_dim == 2:
+            redshift = self.redshift[self.id_sep == asign]
 
-        return data, data_err, ref_f
+            return data, data_err, ref_f, redshift
+
+        else:
+
+            return data, data_err, ref_f
 
     def gmm_fit(self, ref_f_train, data_train, rel_err_train, ref_f_val, data_val, rel_err_val, model_name):
-        """ Deconvolve and fir GMM to the training data
+        """ Deconvolve and fit GMM to the training data
 
         :param ref_f_train:
         :param data_train:
@@ -168,7 +185,7 @@ class GMM:
                                   batch_size=batch_size, shuffle=False)
 
         # NN initialization
-        gmm = model.GMMNet(self.n_gauss, self.rel_flux.shape[1], conditional_dim=1)
+        gmm = model.GMMNet(self.n_gauss, self.rel_flux.shape[1], conditional_dim=self.conditional_dim)
         optimizer = torch.optim.Adam(gmm.parameters(),
                                      lr=self.lr,
                                      weight_decay=self.weight_decay)
@@ -216,7 +233,7 @@ class GMM:
                 break
 
     def test_sample(self, ref_f_test, data_test, rel_err_test, model_name):
-        """ Deconvolve and fir GMM to the training data
+        """ Deconvolve and fit GMM to the training data
 
         :param ref_f_test:
         :param data_test:
@@ -227,7 +244,7 @@ class GMM:
                                  shuffle=False)
 
         # NN initialization
-        best_model = model.GMMNet(self.n_gauss, self.rel_flux.shape[1], conditional_dim=1)
+        best_model = model.GMMNet(self.n_gauss, self.rel_flux.shape[1], conditional_dim=self.conditional_dim)
         best_model.load_state_dict(torch.load(f'XD_fit_models/{self.n_gauss}G_{model_name}.pkl'))
 
         best_model.eval()
@@ -240,7 +257,7 @@ class GMM:
         print('\nTest loss:', tes_loss.item())
 
     def sample_data(self, model_name):
-        """ Deconvolve and fir GMM to the training data
+        """ Deconvolve and fit GMM to the training data
 
         :param model_name:
         Returns:
@@ -248,7 +265,7 @@ class GMM:
         """
 
         # NN initialization
-        best_model = model.GMMNet(self.n_gauss, self.rel_flux.shape[1], conditional_dim=1)
+        best_model = model.GMMNet(self.n_gauss, self.rel_flux.shape[1], conditional_dim=self.conditional_dim)
         best_model.load_state_dict(torch.load(f'XD_fit_models/{self.n_gauss}G_{model_name}.pkl'))
         best_model.eval()
 
