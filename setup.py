@@ -8,7 +8,7 @@ setup(name='CondXD',
       #author_email='riccardonanni@ucsb.edu,',
       #license='GPL',
       url='https://github.com/enigma-igm/CondXD',
-      packages=['gmmnet'],
+      packages=['gmmnet', 'models'],
       requires=['numpy', 'matplotlib','scipy','torch'],
       classifiers=[
           'Development Status :: 4 - Beta',
