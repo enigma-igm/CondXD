@@ -29,7 +29,7 @@ class GMM:
 
         # Read the hyperparmeters
         self.lr = hyper_params.get("learning_rate", 1e-3)
-        self.bathc_size = hyper_params.get("batch_size", 500)
+        self.batch_size = hyper_params.get("batch_size", 500)
         self.schedule_factor = hyper_params.get("schedule_factor", 0.4)
         self.patience = hyper_params.get("patience", 2)
         self.num_epoch = hyper_params.get("num_epoch", 100)
@@ -150,12 +150,9 @@ class GMM:
         ref_f = self.ref_f[self.id_sep == asign]
         if self.conditional_dim == 2:
             redshift = self.redshift[self.id_sep == asign]
+            ref_f = torch.cat((ref_f, redshift), 1)
 
-            return data, data_err, ref_f, redshift
-
-        else:
-
-            return data, data_err, ref_f
+        return data, data_err, ref_f
 
     def gmm_fit(self, ref_f_train, data_train, rel_err_train, ref_f_val, data_val, rel_err_val, model_name):
         """ Deconvolve and fit GMM to the training data
@@ -178,7 +175,7 @@ class GMM:
             os.mkdir(path + '/XD_fit_models')
 
         # put data into batches
-        batch_size = self.bathc_size
+        batch_size = self.batch_size
         train_loader = DataLoader(TensorDataset(ref_f_train, data_train, rel_err_train),
                                   batch_size=batch_size, shuffle=True)
         valid_loader = DataLoader(TensorDataset(ref_f_val, data_val, rel_err_val),
@@ -240,7 +237,7 @@ class GMM:
         :param rel_err_test:
         :param model_name:
         """
-        test_loader = DataLoader(TensorDataset(ref_f_test, data_test, rel_err_test), batch_size=self.bathc_size,
+        test_loader = DataLoader(TensorDataset(ref_f_test, data_test, rel_err_test), batch_size=self.batch_size,
                                  shuffle=False)
 
         # NN initialization
@@ -271,10 +268,15 @@ class GMM:
 
         output = torch.zeros_like(self.rel_flux)
         output_noisy = torch.zeros_like(self.rel_flux)
+        if self.conditional_dim > 1:
+            ref_f = torch.cat((self.ref_f, self.redshift), 1)
+        else:
+            ref_f = self.ref_f
 
-        for i in range(len(self.ref_f)):
-            output[i] = best_model.sample(self.ref_f[i].unsqueeze(0), 1)
-            output_noisy[i] = best_model.sample(self.ref_f[i].unsqueeze(0), 1,
+        for i in range(len(ref_f)):
+
+            output[i] = best_model.sample(ref_f[i].unsqueeze(0), 1)
+            output_noisy[i] = best_model.sample(ref_f[i].unsqueeze(0), 1,
                                                 self.rel_flux_err[i].unsqueeze(0))
 
         output = output.numpy()

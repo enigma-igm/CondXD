@@ -71,13 +71,16 @@ def interpolate_number_counts(ref_mag, prior_mag, area, bins=10, range=[17, 23],
 
     return prior_prob
 
-def log_prob_computation(GMM_params, hyper_params, model_name, table_name, overwrite=True):
+def log_prob_computation(GMM_params, hyper_params, model_name, table_name, overwrite=True, conditional_dim=1,
+                         zrange=None):
     """ Compute the probability density of the provided sample wrt the specified model
 
         :param GMM_params:
         :param hyper_params:
         :param table_name:
         :param overwrite:
+        :param conditional_dim:
+        :param zrange:
         """
 
     _create_prob_folder()
@@ -85,18 +88,48 @@ def log_prob_computation(GMM_params, hyper_params, model_name, table_name, overw
     # Initialize the NN and sample the noisy and noiseless data
     XD = GMM(GMM_params, hyper_params)
 
-    best_model = model.GMMNet(XD.n_gauss, XD.rel_flux.shape[1], conditional_dim=1)
+    best_model = model.GMMNet(XD.n_gauss, XD.rel_flux.shape[1], conditional_dim=conditional_dim)
     best_model.load_state_dict(torch.load('XD_fit_models/{}.pkl'.format(model_name)))
     best_model.eval()
-    log_prob_dens = best_model.log_prob_conditional(XD.rel_flux, XD.ref_f, noise=XD.rel_flux_err).detach().numpy()
+    if conditional_dim == 1:
+        log_prob_dens = best_model.log_prob_conditional(XD.rel_flux, XD.ref_f, noise=XD.rel_flux_err).detach().numpy()
 
-    # Save the computed probabilities
-    idx = np.linspace(1, len(log_prob_dens), len(log_prob_dens))
-    catalog = np.vstack((idx, np.transpose(log_prob_dens)))
-    dat = Table(np.transpose(catalog), names=['idx', 'logP'])
-    dat.write('probabilities/{}_probabilities.fits'.format(table_name), format='fits', overwrite=overwrite)
+        # Save the computed probabilities
+        idx = np.linspace(1, len(log_prob_dens), len(log_prob_dens))
+        catalog = np.vstack((idx, np.transpose(log_prob_dens)))
+        dat = Table(np.transpose(catalog), names=['idx', 'logP'])
+        dat.write('probabilities/{}_probabilities.fits'.format(table_name), format='fits', overwrite=overwrite)
 
-    return log_prob_dens
+        return log_prob_dens
+
+    else:
+        redshift = np.arange(zrange[0], zrange[1]+0.1, 0.1)
+        log_prob_dens_z = np.zeros((len(redshift), len(XD.ref_f)))
+        for i, z in enumerate(redshift):
+            redshift_array = torch.Tensor(np.ones_like(XD.ref_f, dtype=float).reshape(-1, 1)*z)
+            ref_f = torch.cat((XD.ref_f, redshift_array), 1)
+            log_prob_dens_z[i] = best_model.log_prob_conditional(XD.rel_flux, ref_f,
+                                                                 noise=XD.rel_flux_err).detach().numpy()
+        #log_prob_dens = np.amax(log_prob_dens_z, axis=0)
+        #ind = np.argmax(log_prob_dens_z, axis=0)
+        #photometric_redshift = redshift[ind]
+
+        # Save the computed probabilities
+        redshift_distr = np.repeat(redshift, log_prob_dens_z.shape[1], axis=0).reshape(log_prob_dens_z.shape[0],
+                                                                          log_prob_dens_z.shape[1])
+        idx = np.linspace(1, log_prob_dens_z.shape[1], log_prob_dens_z.shape[1])
+        prob_red = np.vstack((log_prob_dens_z, redshift_distr))
+        catalog = np.vstack((idx, prob_red))
+        prob_name = ['P(z={})'.format(str(round(z,1))) for z in redshift]
+        red_name = ['z={}'.format(str(round(z, 1))) for z in redshift]
+        prob_name.append(red_name)
+        name = ['idx']
+        name.append(prob_name)
+        dat = Table(np.transpose(catalog), names=name)
+        embed()
+        dat.write('probabilities/{}_probabilities.fits'.format(table_name), format='fits', overwrite=overwrite)
+
+        return log_prob_dens_z, redshift_distr
 
 def _prior(x, popt, spl, xc):
     """ Compute the priors of the distribution
