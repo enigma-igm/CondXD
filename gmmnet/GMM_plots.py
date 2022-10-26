@@ -8,6 +8,8 @@ import numpy as np
 
 import corner
 
+from IPython import embed
+
 
 def create_fig_folder():
     # Chek the existence of the fig folders and creates it in case it is missing, so to store the plots
@@ -103,7 +105,7 @@ def plot_mag_distribution_data(bin_mp, hist, area, popt, xc, spl, limits, ylimit
 def plot_prob_hist(prob, bins=100, label='', extension_name='data'):
     """ Plot the total probability distribution
 
-        Args:
+        Args:ax.pl
             prob (narray): the total probability
             bins (int): the number of bins to use in the histogram
             extension_name (string): the label to show in the histogram
@@ -126,3 +128,44 @@ def plot_prob_hist(prob, bins=100, label='', extension_name='data'):
     plt.tight_layout()
     fig.savefig('figs/' + extension_name + '_prob_hist.pdf')
     plt.close()
+
+def plot_prob_red_dist(prob, z=[], index=[0], zrange=[6,8], zstep=0.01):
+    """ Plot the probability density vs redshift
+
+        Args:
+            bin_mp (narray): the bin mid points of the distribution
+            hist (narray): the number counts
+            area (float): the area of the survey
+            popt (list, shape nx2): the parameters of the power-law that accounts for the incompleteness
+            xc (float): the incompleteness magnitude value
+            spl (spline function): the spline used to interpolate the distribution
+            limits (list, shape nx2): the ranges to plot
+            ylimits (list, shape nx2): the range to plot in the y-axis
+            extension_name (string): the specific name of the plot
+        """
+    create_fig_folder()
+
+    redshift = np.arange(zrange[0], zrange[1] + zstep, zstep)
+
+    for i, idx in enumerate(index):
+        fig = plt.figure(num=None, figsize=(15, 10))
+        ax = plt.subplot(1, 1, 1)
+        #ax.set_yscale('log')
+        ax.tick_params(axis='both', which='minor', direction='in', length=5, labelsize=30, width=4)
+        ax.tick_params(axis='both', which='major', direction='in', length=10, labelsize=30, width=4)
+        ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+        ax.xaxis.set_ticks_position('both')
+        ax.yaxis.set_ticks_position('both')
+        ax.set_ylabel("ln(P(z))", fontsize=35)
+        ax.set_xlabel("z", fontsize=35)
+
+        if len(z) != 0:
+            ax.axvline(x=z[i], linewidth=4, color='r', linestyle='--')
+
+        ax.plot(redshift, np.log(prob[i]), 'k-', markersize=5, linewidth=4, label=str(i))
+        ax.set_xlim(zrange[0]-0.1, zrange[1]+0.1)
+        #ax.set_ylim(ylimits)
+        ax.legend(loc='upper left', fontsize='35')
+        plt.tight_layout()
+        fig.savefig('figs/' + str(i) + '_prob_red_distribution.png')
+        plt.close()
