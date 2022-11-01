@@ -5,7 +5,7 @@ import os
 import numpy as np
 
 from scipy.optimize import curve_fit
-from scipy import interpolate
+from scipy import interpolate, special
 
 from astropy.table import Table
 
@@ -72,7 +72,7 @@ def interpolate_number_counts(ref_mag, prior_mag, area, bins=10, range=[17, 23],
     return prior_prob
 
 def log_prob_computation(GMM_params, hyper_params, model_name, table_name, overwrite=True, conditional_dim=1,
-                         zrange=None, zstep=0.01):
+                         zrange=[0, 9], zstep=0.01):
     """ Compute the probability density of the provided sample wrt the specified model
 
         :param GMM_params:
@@ -140,3 +140,36 @@ def _prior(x, popt, spl, xc):
         return np.power(10, popt[0]) * x ** popt[1]
     else:
         return spl(x)
+
+def _normalization_computation(log_prob, zrange=[0, 9], zstep=0.01):
+    """ Compute the normalization of the probability density vs redshift distribution
+
+        :param log_prob:
+        :param zrange:
+        :param zstep:
+        """
+
+    norm = (zrange[1] - zrange[0]) / (special.logsumexp(log_prob, axis=0) * zstep)
+
+    return norm
+
+def classification_probability(log_prob_qso, p_cont, prior_qso, prior_cont, zrange_max=[0, 9], zrange=[0, 9],
+                               zstep=0.01):
+
+    norm_qso = _normalization_computation(log_prob_qso, zrange, zstep)
+
+    redshift = np.arange(zrange[0], zrange[1] + zstep, zstep)
+    idx = np.where((redshift <= zrange_max[1]) & (redshift >= zrange_max[0]))[0]
+    log_prob_qso_num = log_prob_qso[idx]
+    prior_qso_num = prior_qso[idx]
+
+    prob_qso = (zstep * norm_qso * special.logsumexp(log_prob_qso_num, axis=0, b=prior_qso_num) /
+                (zrange_max[1] - zrange_max[0])) / (p_cont * prior_cont + zstep * norm_qso *
+                special.logsumexp(log_prob_qso, axis=0, b=prior_qso) / (zrange[1] - zrange[0]))
+
+    prob_cont = (p_cont * prior_cont) / \
+               (p_cont * prior_cont + zstep * norm_qso * special.logsumexp(log_prob_qso, axis=0, b=prior_qso) /
+                (zrange[1] - zrange[0]))
+    embed()
+
+    return prob_qso, prob_cont
