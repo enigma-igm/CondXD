@@ -12,10 +12,12 @@ from IPython import embed
 
 
 def create_fig_folder():
-    # Chek the existence of the fig folders and creates it in case it is missing, so to store the plots
+    # Check the existence of the fig folders and creates it in case it is missing, so to store the plots
+
     path = os.getcwd()
     if os.path.isdir('figs'):
         print("Directory figs already exists")
+
     else:
         print("Creating the directory: figs")
         os.mkdir(path + '/figs')
@@ -33,6 +35,7 @@ def cornerplots(real_data, test_data, labels, bins, ranges, legend, name):
         legend (string): legend of the sampled set on the plot.
         name (string): the specific name of the plot of relative fluxes.
     """
+
     fig = corner.corner(real_data, labels=labels, label_kwargs={"fontsize": 25}, bins=bins, range=ranges,
                         quiet=True, levels=(0.382, 0.682, 0.866,))
     corner.corner(test_data, fig=fig, color='r', labels=labels, label_kwargs={"fontsize": 25}, bins=bins,
@@ -49,7 +52,14 @@ def cornerplots(real_data, test_data, labels, bins, ranges, legend, name):
 
 
 def make_gif(name, save_name):
-    # Create a gif of the relative flux contours
+    """Create a gif of the relative flux contours.
+
+        Args:
+            name (list): list of figures that should be used for the gif creation.
+            save_name (string): name of the outupt gif.
+        """
+    #
+
     import imageio
     folder = 'figs/'
     files = [folder + f'{_}_relative_flux.png' for _ in name]
@@ -71,12 +81,16 @@ def plot_mag_distribution_data(bin_mp, hist, area, popt, xc, spl, limits, ylimit
             ylimits (list, shape nx2): the range to plot in the y-axis
             extension_name (string): the specific name of the plot
         """
+
     create_fig_folder()
 
     def plaw(x, popt, spl, xc):
         if (x > xc):
+
             return np.power(10, popt[0]) * x ** popt[1]
+
         else:
+
             return spl(x)
 
     fig = plt.figure(num=None, figsize=(15, 10))
@@ -108,9 +122,10 @@ def plot_prob_hist(prob, bins=100, label='', extension_name='data'):
         Args:ax.pl
             prob (narray): the total probability
             bins (int): the number of bins to use in the histogram
-            extension_name (string): the label to show in the histogram
+            label (string): the label to show in the histogram
             extension_name (string): the specific name of the plot
         """
+
     fig = plt.figure(num=None, figsize=(15, 10))
     ax = plt.subplot(1, 1, 1)
     ax.tick_params(axis='both', which='minor', direction='in', length=5, labelsize=30, width=4)
@@ -133,21 +148,18 @@ def plot_prob_red_dist(prob, z=[], index=[0], zrange=[6,8], zstep=0.01):
     """ Plot the probability density vs redshift
 
         Args:
-            bin_mp (narray): the bin mid points of the distribution
-            hist (narray): the number counts
-            area (float): the area of the survey
-            popt (list, shape nx2): the parameters of the power-law that accounts for the incompleteness
-            xc (float): the incompleteness magnitude value
-            spl (spline function): the spline used to interpolate the distribution
-            limits (list, shape nx2): the ranges to plot
-            ylimits (list, shape nx2): the range to plot in the y-axis
-            extension_name (string): the specific name of the plot
+            prob (narray): the total probability
+            z (list): redshifts of the sources to plot
+            index (list): indexes of the sources to plot
+            zrange (list): the redshift range to plot
+            zstep (float): step in redshift used to construct the histogram
         """
+
     create_fig_folder()
 
     redshift = np.arange(zrange[0], zrange[1] + zstep, zstep)
 
-    for i, idx in enumerate(index):
+    for i, idx in (index):
         fig = plt.figure(num=None, figsize=(15, 10))
         ax = plt.subplot(1, 1, 1)
         #ax.set_yscale('log')

@@ -20,11 +20,12 @@ class GMM:
     Class for deconvolving and fitting data with Gaussian mixture models, and classifying them
     """
     def __init__(self, GMM_params, hyper_params, low_SN_mag=21):
-        """
+        """ This is the initialization function
 
-        :param GMM_params:
-        :param hyper_params:
-        :param low_SN_mag:
+            Args:
+                GMM_params (dictionary): physical parameters for contaminants and QSOs
+                hyper_params (dictionary): hyperparameters used to train the NN
+                low_SN_mag (float): reference magnitude above which the covariance matrix is simply diagonal
         """
 
         # Read the hyperparmeters
@@ -55,9 +56,7 @@ class GMM:
         ref_f = output[GMM_params['ref_flux']].astype('float').reshape(-1, 1)
         self.classif = GMM_params.get("class", "contaminants")
         ref_f_err = output[GMM_params['ref_flux_err']].astype('float').reshape(-1, 1)
-        if self.conditional_dim == 2:
-            redshift = output[GMM_params['redshift']].astype('float').reshape(-1, 1)
-            self.redshift = torch.Tensor(redshift)
+
         hdu_list.close()
 
         self.rel_flux = torch.Tensor(flux/ref_f.T).transpose(1, 0)
@@ -67,6 +66,7 @@ class GMM:
         self.ref_f_err = torch.Tensor(ref_f_err)
         self.rel_flux_err = self._get_noise_covar(flux_err, ref_f, low_SN_mag=low_SN_mag)
 
+        # If training for QSOs, adds a tiny error to the data
         if self.classif in "qso":
             self.rel_flux = torch.Tensor(np.random.normal(self.rel_flux, 0.01))
             diag = np.arange(self.rel_flux.shape[1])
@@ -77,13 +77,15 @@ class GMM:
 
     def _get_noise_covar(self, flux_err, ref_f, low_SN_mag=21):
         """Generating the covariance matrix of the relative fluxes. If the reference mag is fainter than
-        the defined SNR (low_SN_mag), then the covariance is simply diagonal.
+        the low_SN_mag, then the covariance is simply diagonal.
 
-        :param flux_err:
-        :param low_SN_mag:
+            Args:
+                flux_err (tensor): errors matrix of the different fluxes
+                ref_f (tensor): detection band fluxes
+                low_SN_mag (float): reference magnitude above which the covariance matrix is simply diagonal
 
         Returns:
-            tensor: covariant noisy matrix of the relative fluxes.
+            err_r_set (tensor): covariant noisy matrix of the relative fluxes.
         """
         # new covariance matrix
         len_data, dimension = self.rel_flux.shape
@@ -107,6 +109,7 @@ class GMM:
     def _real_size(self,):
         """Define the real size of the training, validation, and testing samples
         """
+
         len_data = self.rel_flux.shape[0]
         real_size_tra = np.round(len_data * self.size_train / 100).astype('int')
         real_size_val = np.round(len_data * self.size_val / 100).astype('int')
@@ -126,13 +129,19 @@ class GMM:
         self.id_sep = id_sep
 
     def sample_splitting(self, sample='training'):
-        """ Create the sample corresponding to the defined parameter
+        """ Create the sample corresponding to the defined parameter: training, validation, testing.
+
+            Args:
+                sample (string): keyword specifying which sample need to be sampled.
 
         :param sample:
 
         Returns:
-            the relative fluxes, covariance matrix, and reference flux for the specified sample
+            data: sampled relative fluxes
+            data_err: sampled covariance matrix
+            ref_f: sampled reference flux for the specified sample
         """
+
         asign = 0
         if sample in 'training':
             asign = 1
@@ -148,22 +157,20 @@ class GMM:
         data = self.rel_flux[self.id_sep == asign]
         data_err = self.rel_flux_err[self.id_sep == asign]
         ref_f = self.ref_f[self.id_sep == asign]
-        if self.conditional_dim == 2:
-            redshift = self.redshift[self.id_sep == asign]
-            ref_f = torch.cat((ref_f, redshift), 1)
 
         return data, data_err, ref_f
 
     def gmm_fit(self, ref_f_train, data_train, rel_err_train, ref_f_val, data_val, rel_err_val, model_name):
-        """ Deconvolve and fit GMM to the training data
+        """ Deconvolve and fit GMM to the training data.
 
-        :param ref_f_train:
-        :param data_train:
-        :param rel_err_train:
-        :param ref_f_val:
-        :param data_val:
-        :param rel_err_val:
-        :param model_name:
+            Args:
+                ref_f_train (tensor): reference flux for the training sample.
+                data_train (tensor): relative fluxes for the training sample.
+                rel_err_train (tensor): covariance matrix for the training sample.
+                ref_f_val (tensor): reference flux for the validation sample.
+                data_val (tensor): relative fluxes for the validation sample.
+                rel_err_val (tensor): covariance matrix for the validation sample.
+                model_name (string): name of the output trained model.
         """
 
         # Create the directory to save the GMMs
@@ -230,13 +237,15 @@ class GMM:
                 break
 
     def test_sample(self, ref_f_test, data_test, rel_err_test, model_name):
-        """ Deconvolve and fit GMM to the training data
+        """ Deconvolve and fit GMM to the test data
 
-        :param ref_f_test:
-        :param data_test:
-        :param rel_err_test:
-        :param model_name:
+            Args:
+                ref_f_test (tensor): reference flux for the test sample.
+                data_test (tensor): relative fluxes for the test sample.
+                rel_err_test (tensor): covariance matrix for the test sample.
+                model_name (string): name of the output trained model.
         """
+
         test_loader = DataLoader(TensorDataset(ref_f_test, data_test, rel_err_test), batch_size=self.batch_size,
                                  shuffle=False)
 
@@ -254,11 +263,16 @@ class GMM:
         print('\nTest loss:', tes_loss.item())
 
     def sample_data(self, model_name):
-        """ Deconvolve and fit GMM to the training data
+        """ Sample data from a specific model.
 
-        :param model_name:
-        Returns:
-            the relative fluxes, and the sampled deconvolved and reconvolved relative fluxes
+            Args:
+                model_name (string): name of the model from which sample model.
+
+            Returns:
+                real_data (tensor): the real relative fluxes to compare with the sample from the model.
+                output (tensor): the sampled noiseless relative fluxes.
+                output_noisy (tensor): the sampled noisy relative fluxes.
+
         """
 
         # NN initialization
@@ -268,10 +282,8 @@ class GMM:
 
         output = torch.zeros_like(self.rel_flux)
         output_noisy = torch.zeros_like(self.rel_flux)
-        if self.conditional_dim > 1:
-            ref_f = torch.cat((self.ref_f, self.redshift), 1)
-        else:
-            ref_f = self.ref_f
+
+        ref_f = self.ref_f
 
         for i in range(len(ref_f)):
 
