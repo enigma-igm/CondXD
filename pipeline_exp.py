@@ -1,37 +1,40 @@
-from data.experiment import data_load
-from models.model import GMMNet
-from diagnostics.plots_exp import exp_figures
-# export PYTHONPATH="${PYTHONPATH}:../extreme-deconvolution/py"
-from xdgmm import XDGMM
+import os
+import copy
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-import copy
-import os
+from data.experiment import data_load
+from models.model import GMMNet
+from diagnostics.plots_exp import exp_figures
+# export PYTHONPATH="${PYTHONPATH}:mypath/extreme-deconvolution/py"
+# to install extreme-deconvolution: run `export LIBRARY_PATH=/usr/local/Cellar/gsl/2.7.1/lib/` 
+# in the terminal before `make`
+from xdgmm import XDGMM
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-hyper_params = {
-    "learning_rate": 1e-3,
-    "batch_size": 500,
-    "schedule_factor": 0.4,
-    "patience": 2,
-    "num_epoch": 100,
-    "weight_decay": 0.001,
-    "size_training": 80,
-    "size_validation": 20,
-    "size_testing": 0,
-    "n_gauss": 20
-}
+
+# hyper_params = {
+#     "learning_rate": 1e-3,
+#     "batch_size": 500,
+#     "schedule_factor": 0.4,
+#     "patience": 2,
+#     "num_epoch": 100,
+#     "weight_decay": 0.001,
+#     "size_training": 80,
+#     "size_validation": 20,
+#     "size_testing": 0,
+#     "n_gauss": 20
+# }
 
 # components, dimension of data, and dimension of conditional
 K, D, D_cond = 10, 7, 1
 
 # size of training sample and validation sample
-N_t = 60000
-N_v = N_t//6
+N_t = 90000
+N_v = N_t//9
 
 # old method parameters
 n_bin = 10
@@ -135,7 +138,7 @@ for seed in seed_list:
         bin_filter = bin_filter.flatten()
         data_t_bin = data_t[bin_filter].numpy()
         noise_t_bin = noise_t[bin_filter].numpy()
-
+        
         xd.fit(data_t_bin, noise_t_bin)
         xd_list = np.append(xd_list, xd)
         weights_last = xd.weights
@@ -179,6 +182,8 @@ KL_div_std  = KL_div_np.std(axis=0)
 import matplotlib.pyplot as plt
 plt.close('all')
 
+from IPython import embed
+embed(header='Now adjust the KL-Div figure.')
 fig, ax = plt.subplots()
 
 '''
@@ -187,30 +192,33 @@ linetypes = ['$D_\mathrm{KL}$(underlying | deconvolved fitted)',
             'Estimated Max $D_\mathrm{KL}$']
 '''
 linetypes = ['$D_\mathrm{KL, deconvolved}$',
-            '$D_\mathrm{KL, reconvolved}$',
-            'Estimated Max $D_\mathrm{KL}$']
+            '$D_\mathrm{KL, noisy}$']
 linestyles = ['solid', 'dashed', '-.']
 methods = ['', '']
 if xd_list is not None:
     methods = [', CondXD', ', bin-XD']
 
-for i in [0, 1, 2]:
+for i in [0, 1]:
     ax.plot(cond, KL_div_mean[i], label=linetypes[i]+methods[0], linestyle=linestyles[i], color='tab:red')
     ax.fill_between(cond, KL_div_mean[i]-KL_div_std[i], KL_div_mean[i]+KL_div_std[i],
                     facecolor='tab:red', alpha=0.5)
-ax.legend(fontsize=10, frameon=False)
+i = 2
+ax.plot(cond, KL_div_mean[i], linestyle=linestyles[i], color='tab:red')
+ax.fill_between(cond, KL_div_mean[i]-KL_div_std[i], KL_div_mean[i]+KL_div_std[i],
+                facecolor='tab:red', alpha=0.5)
+ax.annotate('Estimated Max $D_\mathrm{KL}$'+methods[0], xy=(0.27,2.55), color='tab:red',fontsize=12.5)
 
 if xd_list is not None:
     for i in [3, 4]: # not play maximum estimation of bin-XD
         ax.plot(cond, KL_div_mean[i], label=linetypes[i-3]+methods[1], linestyle=linestyles[i-3], color='tab:blue')
         ax.fill_between(cond, KL_div_mean[i]-KL_div_std[i], KL_div_mean[i]+KL_div_std[i],
                         facecolor='tab:blue', alpha=0.35)
-    ax.legend(fontsize=10, frameon=False)
+    ax.legend(fontsize=12.5, frameon=False)
 
 ax.set_xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
 ax.set_xlabel('Conditional c', fontsize=14)
 ax.set_ylabel('$D_\mathrm{KL}$', fontsize=14)
 fig.savefig('figs/experiment/KLDiv_mean.pdf')
-plt.show()
+plt.close()
 
 np.save('random_seed', KL_div_list)
