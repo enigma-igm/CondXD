@@ -182,8 +182,8 @@ KL_div_std  = KL_div_np.std(axis=0)
 import matplotlib.pyplot as plt
 plt.close('all')
 
-from IPython import embed
-embed(header='Now adjust the KL-Div figure.')
+# from IPython import embed
+# embed(header='Now adjust the KL-Div figure.')
 fig, ax = plt.subplots()
 
 '''

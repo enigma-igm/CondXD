@@ -1,10 +1,11 @@
-from numpy import linalg as la
 import numpy as np
+from numpy import linalg as la
+
 
 import torch
 import torch.nn as nn
 import torch.distributions as dist
-from torch.utils.data import WeightedRandomSampler
+from torch import multinomial
 
 mvn = dist.multivariate_normal.MultivariateNormal
 
@@ -111,7 +112,7 @@ class GMMNet(nn.Module):
 
         noisy_covars = covars + noise
 
-        noisy_covars = 0.5 * (noisy_covars + noisy_covars.mT)
+        noisy_covars = 0.5 * (noisy_covars + noisy_covars.transpose(-1, -2))
 
         log_resp = mvn(loc=means, covariance_matrix=noisy_covars).log_prob(data[:, None, :])
 
@@ -145,10 +146,10 @@ class GMMNet(nn.Module):
     def sample(self, conditional, n_per_conditional=1, noise=None):
 
         weights, means, covars = self.forward(conditional)
-
+        
         batchsize = conditional.shape[0]
-        draw = list(WeightedRandomSampler(weights, n_per_conditional))
-        means = means[:, draw][torch.eye(batchsize).to(torch.bool)]
+        draw = multinomial(weights, n_per_conditional, replacement=True)
+        means  = means[:, draw][torch.eye(batchsize).to(torch.bool)]
         covars = covars[:, draw][torch.eye(batchsize).to(torch.bool)]
 
         if noise is None:
@@ -158,7 +159,7 @@ class GMMNet(nn.Module):
 
         noisy_covars = covars + noise
 
-        noisy_covars = 0.5 * (noisy_covars + noisy_covars.mT)
+        noisy_covars = 0.5 * (noisy_covars + noisy_covars.transpose(-1, -2))
 
         data = mvn(loc=means, covariance_matrix=noisy_covars).sample()
 
