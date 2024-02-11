@@ -154,6 +154,54 @@ def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=
 
     return figure
 
+def density_comp_3(data_deconvolved, data_clean, data_noisy, label, nbins, conditional, path, ranges=None):
+    """[summary]
+
+    Args:
+        data_r ([type]): [description]
+        data_p ([type]): [description]
+        label ([type]): [description]
+        bins ([type]): [description]
+        conditional ([type]): [description]
+        noisy (bool): [description].
+    """
+
+    import corner
+    
+    label_deconvolved = 'Deconvolution'
+    label_clean = 'Noiseless Underlying'
+    label_noisy = 'Noisy'
+    D = data_deconvolved.shape[-1]
+
+    figure = corner.corner(data_noisy, bins=nbins, range=ranges,
+                        color='grey', labels=label, label_kwargs=dict(fontsize=16))
+    if ranges is None:
+        ranges = get_ranges(figure) # keeping the same range and bins
+    corner.corner(data_clean, bins=nbins, range=ranges, fig=figure, 
+                        color='black', labels=label, label_kwargs=dict(fontsize=16))
+    corner.corner(data_deconvolved, bins=nbins, range=ranges, fig=figure, 
+                        color='tab:red', hist_kwargs=dict(alpha=0.85),
+                        contour_kwargs=dict(alpha=0.75),
+                        labels=label, label_kwargs=dict(fontsize=16))
+    
+    
+    axes = np.array(figure.axes).reshape(D, D)
+    for ax in figure.get_axes():
+        ax.tick_params(axis='both', direction='in', labelsize=12)
+    
+    # setting annotates
+    axes[1, -3].text(0.6, 1.3, 'conditional $\mathbf{c}$'+f'={conditional:.2f}',
+                    fontsize=40, horizontalalignment='center', c='black', weight='bold')
+    axes[1, -3].text(0.6, 0.8, label_noisy,
+                    fontsize=25, horizontalalignment='center', c='grey', weight='bold')
+    axes[1, -3].text(0.6, 0.5, label_clean,
+                    fontsize=25, horizontalalignment='center', c='k', weight='bold')
+    axes[1, -3].text(0.6, 0.2, label_deconvolved,
+                    fontsize=25, horizontalalignment='center', c='tab:red', weight='bold')
+    figure.savefig(path+f'Comp_{conditional:.2f}.pdf')
+
+    return figure
+
 # density comparison plot
 def deconv_comp(data_r, data_p, label, nbins, conditional, path, ranges=None):
     """[summary]
@@ -419,8 +467,12 @@ def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_
         ranges = get_ranges(figure)
         figure = density_comp(data_r_clean, data_p_clean, label, bins, conditional, noisy=False, path=path,
                                 ranges=ranges)
+        # conerplots noisy vs clean
         figure = deconv_comp(data_r_noisy, data_p_clean, label, bins, conditional, path=path,
                                 ranges=ranges)
+        # conerplots noisy distribution vs underlying distribution vs deconvolution
+        figure = density_comp_3(data_p_clean, data_r_clean, data_r_noisy, label, bins, conditional, path=path)
+        
         del figure
 
 
