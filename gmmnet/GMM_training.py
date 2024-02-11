@@ -262,7 +262,7 @@ class GMM:
         tes_loss = tes_loss / self.size_test
         print('\nTest loss:', tes_loss.item())
 
-    def sample_data(self, model_name):
+    def sample_data(self, model_name, N=None):
         """ Sample data from a specific model.
 
             Args:
@@ -275,24 +275,37 @@ class GMM:
 
         """
 
-        # NN initialization
+        # NN initialization 
         best_model = model.GMMNet(self.n_gauss, self.rel_flux.shape[1], conditional_dim=self.conditional_dim)
         best_model.load_state_dict(torch.load(f'XD_fit_models/{self.n_gauss}G_{model_name}.pkl'))
         best_model.eval()
 
-        output = torch.zeros_like(self.rel_flux)
-        output_noisy = torch.zeros_like(self.rel_flux)
+        if N is None:
+            ref_f = self.ref_f
+            rel_flux = self.rel_flux
+            rel_flux_err = self.rel_flux_err
+        else:
+            # TODO DMY: maybe we need to first fit a disribution and sample from it
+            indices = np.random.choice(len(self.ref_f), int(N), replace=True)
+            ref_f = self.ref_f[indices]
 
-        ref_f = self.ref_f
+            # TODO DMY: check if this is correct!
+            rel_flux = self.rel_flux[indices]
+            rel_flux_err = self.rel_flux_err[indices]
+
+        output = torch.zeros_like(rel_flux)
+        output_noisy = torch.zeros_like(rel_flux)
 
         for i in range(len(ref_f)):
 
             output[i] = best_model.sample(ref_f[i].unsqueeze(0), 1)
             output_noisy[i] = best_model.sample(ref_f[i].unsqueeze(0), 1,
-                                                self.rel_flux_err[i].unsqueeze(0))
+                                                rel_flux_err[i].unsqueeze(0))
 
         output = output.numpy()
         output_noisy = output_noisy.numpy()
-        real_data = self.rel_flux.numpy()
 
-        return real_data, output, output_noisy
+        return output, output_noisy, ref_f.numpy()
+    
+    def get_real_data(self):
+        return self.rel_flux.numpy()
