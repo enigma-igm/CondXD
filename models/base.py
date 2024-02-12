@@ -7,7 +7,7 @@ from torch import multinomial
 
 mvn = dist.multivariate_normal.MultivariateNormal
 
-class CondXDBase(nn.module):
+class CondXDBase(nn.Module):
     def __init__(self,
                  n_Gaussians,
                  data_dim,
