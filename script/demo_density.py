@@ -4,6 +4,7 @@ from astropy.io import fits
 from astropy.table import Table
 import os
 
+""" 1. Load the data, make it suitable for CondXD """
 cont_table = Table.read(os.path.join(datpath, 'JulienCat_candidates_z6.fits'))
 GMM_params = {'fluxes': ['f_1p2_VIS', 'f_1p2_Y', 'f_1p2_H'],
               'fluxes_err': ['f_1p2_VIS_err', 'f_1p2_Y_err', 'f_1p2_H_err'],
@@ -19,3 +20,12 @@ flux_ratio_covar = qsoutil.get_flux_ratio_covar_from_table(
 
 # get the conditions
 conditions = qsoutil.get_conditions_from_table(cont_table, GMM_params['conditions'])
+
+cont_condxd = CondXD()
+
+# 1. Load the data
+# 2. Split the data
+# 3. Fit the model
+# 4. Validate the model
+# 5. Test the model
+# 6. Sample from the model

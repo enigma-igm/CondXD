@@ -1,3 +1,3 @@
-from .main import CondXD
+from .CondXD import CondXD
 
 __all__ = ['CondXD']
