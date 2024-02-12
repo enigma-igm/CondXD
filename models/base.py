@@ -187,12 +187,12 @@ class CondXDBase(nn.module):
 
         Cholesky = torch.zeros(
             (batch_size, self.n_Gaussians, self.data_dim, self.data_dim))
-
+        # first self.n_Gaussians * self.data_dim elements are on diagonal
         log_diagonal = covars_elements[:, :self.n_Gaussians * self.data_dim
                                     ].reshape(batch_size, self.n_Gaussians, 
                                               self.data_dim)
         Cholesky[:, :, d_idx] = torch.exp(log_diagonal)  # ensure positive
-
+        # later elements are on lower triangle
         lower_tri = covars_elements[:, self.n_Gaussians * self.data_dim:
                                     ].reshape(batch_size, self.n_Gaussians,
                                             self.data_dim * (self.data_dim - 1) // 2)
@@ -206,7 +206,10 @@ class CondXDBase(nn.module):
 
     def reg_loss(self, covars):
         """Computes a regularization loss term to be added to the NN loss
-        (negative likelihood) to prevent singularity problem.
+        (negative likelihood) to prevent singularity problem, computed as the
+        sum of the inverse of the diagonal elements of all the covariance 
+        matrice. The sum is also multiplied with a coefficient, self.w, an
+        input to the CondXD or CondXDBase class.
 
         Parameters
         ----------
