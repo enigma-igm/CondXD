@@ -10,11 +10,13 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 # TODO: DMY - we may want to rename this to something more descriptive
-from .model import model
+from .model import GMMNet
 
 from IPython import embed
 
-class condXD(object):
+__all__ = ['CondXD']
+
+class CondXD(object):
     """
     Gaussian Mixture Model (GMM) for deconvolving and fitting data, and classifying them.
 

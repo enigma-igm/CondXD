@@ -1,2 +1,3 @@
-from . import main
-from . import model
+from .main import CondXD
+
+__all__ = ['CondXD']
