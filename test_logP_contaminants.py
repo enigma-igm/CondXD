@@ -1,6 +1,6 @@
 import torch
 
-from models.model import *
+from CondXD.model import *
 from diagnostics.plots import *
 
 import seaborn as sns

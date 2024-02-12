@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from models.model import mvn
+from condxd.model import mvn
 
 
 # training and validation loss
