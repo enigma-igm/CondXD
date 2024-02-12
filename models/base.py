@@ -404,8 +404,8 @@ class CondXDBase(nn.module):
         This method utilizes the GMM parameters (mixing coefficients, means, 
         covars) obtained from the forward pass of the input conditionals 
         through the CondXD model, selects components based on the mixing 
-        coefficients, and generates samples accordingly. Gaussian noise 
-        covariance can be added to the covariance matrices if there is noise.
+        coefficients, and generates samples accordingly. Noise covariance can 
+        be added to the covariance matrices if there is Gaussian noise.
         """
     
 
