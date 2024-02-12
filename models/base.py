@@ -1,6 +1,4 @@
 import numpy as np
-from numpy import linalg as la
-
 
 import torch
 import torch.nn as nn
