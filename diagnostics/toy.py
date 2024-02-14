@@ -10,7 +10,7 @@ import imageio
 import copy
 
 
-from models.model import mvn
+from condxd.model import mvn
 
 def cornerplots(data_tes, output_tes, labels, bins, ranges, anno, name, noisy=False):
     """Making comparison corner plots of the test set.

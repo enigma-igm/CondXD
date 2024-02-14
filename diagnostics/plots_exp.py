@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from models.model import mvn
+from condxd.model import mvn
 
 
 # training and validation loss
@@ -155,15 +155,20 @@ def density_comp(data_r, data_p, label, nbins, conditional, noisy, path, ranges=
     return figure
 
 def density_comp_3(data_deconvolved, data_clean, data_noisy, label, nbins, conditional, path, ranges=None):
-    """[summary]
+    """_summary_
 
     Args:
-        data_r ([type]): [description]
-        data_p ([type]): [description]
-        label ([type]): [description]
-        bins ([type]): [description]
-        conditional ([type]): [description]
-        noisy (bool): [description].
+        data_deconvolved (_type_): _description_
+        data_clean (_type_): _description_
+        data_noisy (_type_): _description_
+        label (_type_): _description_
+        nbins (_type_): _description_
+        conditional (_type_): _description_
+        path (_type_): _description_
+        ranges (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        _type_: _description_
     """
 
     import corner
