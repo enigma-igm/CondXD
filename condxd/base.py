@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
+
+from IPython import embed
+
 mvn = dist.multivariate_normal.MultivariateNormal
 
 class CondXDBase(nn.Module):

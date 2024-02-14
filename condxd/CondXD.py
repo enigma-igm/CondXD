@@ -7,27 +7,15 @@ import torch
 import torch.distributions as dist
 from torch import multinomial
 from torch.utils.data import DataLoader, TensorDataset
-
-mvn = dist.multivariate_normal.MultivariateNormal
-
-# TODO: DMY - we may want to rename this to something more descriptive
 from .base import CondXDBase
 
 from IPython import embed
 
 __all__ = ['CondXD']
 
-class CondXD(CondXDBase):
-    """
-    TODO
+mvn = dist.multivariate_normal.MultivariateNormal
 
-    load processed data (not file, directly for training)
-	data split
-	fit
-	val/test (output loss)
-	sample: check
-    """
-    # pass
+class CondXD(CondXDBase):
 
     """
     A derived class from CondXDBase for specific conditional density estimation
@@ -140,18 +128,23 @@ class CondXD(CondXDBase):
     >>> condxd = CondXD(n_Gaussians=3, sample_dim=2, conditional_dim=2)
     >>> condxd.load_data(cond_data, sample_data, noise_data)
     >>> condxd.deconvolve()
+    >>> samples = condxd.sample(cond_data, n_per_conditional=50)
+    >>> condxd.save(filename='condxd_model.pkl')
+
+    If you want to load a trained model and sample from it:
+    >>> condxd = CondXD(n_Gaussians=3, sample_dim=2, conditional_dim=2)
+    >>> condxd.load('condxd_model.pkl')
+    >>> samples = condxd.sample(cond_data, n_per_conditional=50)
     """
 
 
     def __init__(self,
-                 n_Gaussians,
-                 sample_dim,
-                 conditional_dim,
-                 output_path=None
-                 ):
-        
+                 n_Gaussians=None,
+                 sample_dim=None,
+                 conditional_dim=None):
+
         super(CondXD, self).__init__(n_Gaussians, sample_dim, conditional_dim)
-        
+            
         self.n_Gaussians = n_Gaussians
         self.sample_dim = sample_dim
         self.conditional_dim = conditional_dim
@@ -175,17 +168,6 @@ class CondXD(CondXDBase):
             self.optimizer,
             **self.scheduler_params
         )
-        
-        # Initialize training and validation loss lists
-        self.num_epoch = 100
-        self.train_loss_list = np.ones(self.num_epoch) * np.nan
-        self.valid_loss_list = np.ones(self.num_epoch) * np.nan
-        
-        # Setup the output path
-        if not ((output_path is None) or (output_path[-1] == -1)):
-            raise ValueError("output_path not ended with /")
-        self.output_path = output_path
-
 
     def load_data(self, cond, sample, noise=None, tra_val_tes_size=(70, 15, 15),
                 batch_size=500):
@@ -256,7 +238,7 @@ class CondXD(CondXDBase):
         n_noise, dim_noise, _ = noise.shape
         if not (n_cond == n_sample == n_noise):
             raise ValueError("The length of conditional {}, sample {} and noise {}"
-                            " do not match.".format(len_cond, n_sample, len_noise))
+                            " do not match.".format(n_cond, n_sample, n_noise))
         if not (dim_sample == dim_noise == self.sample_dim):
             raise ValueError("The dimensions of sample {}, noise {} and "
                             "initialization {} do not match."
@@ -413,7 +395,7 @@ class CondXD(CondXDBase):
             **self.scheduler_params
         )
 
-    def deconvolve(self, num_epoch=None):
+    def deconvolve(self, num_epoch=100):
         """
         Trains the model for a specified number of epochs. During each epoch, the
         method performs training on the training dataset and evaluates the model on
@@ -451,22 +433,22 @@ class CondXD(CondXDBase):
         the data, and then trains the model for 50 epochs.
         """
 
-        if num_epoch is not None:
-            self.num_epoch = num_epoch
+        self.num_epoch = num_epoch
+        self.train_loss_list = np.ones(self.num_epoch) * np.nan
+        self.valid_loss_list = np.ones(self.num_epoch) * np.nan
+
         lowest_loss = float('inf')  # Use inf for initial comparison
         best_model = copy.deepcopy(self.state_dict())
 
         for epoch in range(self.num_epoch):
             train_loss = self._train_epoch(epoch)
             val_loss = self._validate_epoch(epoch)
+            print(f'Epoch {epoch}, training loss: {train_loss:.5f}, validation loss: {val_loss:.5f}.')
 
             # Update best model if validation loss is improved
             if val_loss < lowest_loss:
                 lowest_loss = val_loss
                 best_model = copy.deepcopy(self.state_dict())
-                if self.output_path is not None:
-                    model_path = f"{self.output_path}CondXD_params.pkl"
-                    torch.save(best_model.state_dict(), model_path)
         
         # Load the best model back into the model
         self.load_state_dict(best_model)
@@ -488,7 +470,7 @@ class CondXD(CondXDBase):
         
         avg_loss = total_loss / self.size_tra
         self.train_loss_list[epoch] = avg_loss
-        print(f'Epoch {epoch}, training loss: {avg_loss:.5f}.')
+        # print(f'Epoch {epoch}, training loss: {avg_loss:.5f}.')
         return avg_loss
 
     def _validate_epoch(self, epoch):
@@ -502,7 +484,7 @@ class CondXD(CondXDBase):
         
         avg_loss = total_loss / self.size_val
         self.valid_loss_list[epoch] = avg_loss
-        print(f'Epoch {epoch}, validation loss: {avg_loss:.5f}.')
+        # print(f'Epoch {epoch}, validation loss: {avg_loss:.5f}.')
         return avg_loss
 
     def test_model(self, external_cond=None, external_samples=None):
@@ -574,7 +556,7 @@ class CondXD(CondXDBase):
         be added to the covariance matrices if there is Gaussian noise.
         """
     
-
+        conditional = torch.Tensor(conditional)
         mixcoef, means, covars = self.forward(conditional)
         
         batchsize = conditional.shape[0]
@@ -594,3 +576,27 @@ class CondXD(CondXDBase):
         sample = mvn(loc=means, covariance_matrix=noisy_covars).sample()
 
         return sample
+    
+    def save(self, filename=None):
+        """Save the model to a file.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the file to save the model as (including path).
+        """
+        if filename is None:
+            filename = 'CondXD_params.pkl'
+
+        torch.save(self.state_dict(), filename)
+    
+    def load(self, filename):
+        """Load the model from a file.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the file to load the model from.
+        """
+        self.load_state_dict(torch.load(filename))
+        self.eval()
