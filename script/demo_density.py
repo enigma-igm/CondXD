@@ -33,12 +33,14 @@ cont_condxd = CondXD(n_Gaussians=20, sample_dim=sample_dim, conditional_dim=cond
 cont_condxd.load_data(conditions, flux_ratio, flux_ratio_covar, 
                       tra_val_tes_size=(90,10,0), batch_size=10)
 cont_condxd.deconvolve(num_epoch=100)
+
+""" 3. Sample from the model """
 flux_ratio_sample = cont_condxd.sample(conditions, n_per_conditional=50)
 flux_ratio_sample = flux_ratio_sample.reshape(-1, sample_dim).detach().numpy()
 
 cont_condxd.save(filename='ero_cont.pkl')
 
-
+""" 4. Plot the results """
 fig, ax = plt.subplots(3, 3, figsize=(8, 8))
 ranges = [(-0.08,0.12), (-0.5,1.5), (-0.5,3)]
 smooth = 0.6
