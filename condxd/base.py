@@ -1,16 +1,12 @@
-import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.distributions as dist
-from torch import multinomial
-
 mvn = dist.multivariate_normal.MultivariateNormal
 
 class CondXDBase(nn.Module):
     def __init__(self,
                  n_Gaussians,
-                 data_dim,
+                 sample_dim,
                  conditional_dim,
                  vec_dim=128,
                  num_embedding_layers=3,
@@ -30,7 +26,7 @@ class CondXDBase(nn.Module):
         n_Gaussians : int 
             Number of Gaussian components.
 
-        data_dim : int
+        sample_dim : int
             Number of dimensions for samples.
 
         conditional_dim : int
@@ -66,10 +62,10 @@ class CondXDBase(nn.Module):
             (all Gaussian components).
         """
         
-        super().__init__()
+        super(CondXDBase, self).__init__()
 
         self.n_Gaussians = n_Gaussians
-        self.data_dim = data_dim
+        self.sample_dim = sample_dim
         self.conditional_dim = conditional_dim
         self.vec_dim = vec_dim
         self.num_embedding_layers = num_embedding_layers
@@ -118,7 +114,7 @@ class CondXDBase(nn.Module):
             ]
 
         means_layers += [
-            nn.Linear(self.vec_dim, self.n_Gaussians * self.data_dim)
+            nn.Linear(self.vec_dim, self.n_Gaussians * self.sample_dim)
         ]
 
         self.means_network = nn.Sequential(*means_layers)
@@ -133,13 +129,13 @@ class CondXDBase(nn.Module):
 
         covar_layers += [
             nn.Linear(self.vec_dim, 
-                    self.n_Gaussians * self.data_dim * (self.data_dim + 1) // 2)
+                    self.n_Gaussians * self.sample_dim * (self.sample_dim + 1) // 2)
         ]
 
         self.covar_network = nn.Sequential(*covar_layers)
 
     def forward(self, conditional):
-        """Defines the forward pass of the model.
+        """Defines the forward pass of CondXD.
 
         Parameters
         ----------
@@ -155,12 +151,12 @@ class CondXDBase(nn.Module):
 
         means : torch.Tensor
             The means of each Gaussian component in the mixture model,
-            with shape (batch_size, n_Gaussians, data_dim).
+            with shape (batch_size, n_Gaussians, sample_dim).
 
         covars : torch.Tensor
             The covariances of each Gaussian component in the mixture model,
-            with shape (batch_size, n_Gaussians, data_dim, data_dim). Built 
-            from Cholesky decomposition to ensure positive definiteness.
+            with shape (batch_size, n_Gaussians, sample_dim, sample_dim). 
+            Built from Cholesky decomposition to ensure positive definiteness.
         """
 
         batch_size = conditional.shape[0]  # batch size
@@ -173,32 +169,32 @@ class CondXDBase(nn.Module):
 
         # calculate means
         means = self.means_network(embedding).reshape(
-            -1, self.n_Gaussians, self.data_dim)
+            -1, self.n_Gaussians, self.sample_dim)
 
         # calculate cholesky decomposition of covariance matrix
         covars_elements = self.covar_network(embedding)
 
         # diagonal index
-        d_idx = torch.eye(self.data_dim).to(torch.bool)
+        d_idx = torch.eye(self.sample_dim).to(torch.bool)
         # lower triangle index
-        l_idx = torch.tril_indices(self.data_dim, self.data_dim, -1)
+        l_idx = torch.tril_indices(self.sample_dim, self.sample_dim, -1)
 
         Cholesky = torch.zeros(
-            (batch_size, self.n_Gaussians, self.data_dim, self.data_dim))
-        # first self.n_Gaussians * self.data_dim elements are on diagonal
-        log_diagonal = covars_elements[:, :self.n_Gaussians * self.data_dim
+            (batch_size, self.n_Gaussians, self.sample_dim, self.sample_dim))
+        # first self.n_Gaussians * self.sample_dim elements are on diagonal
+        log_diagonal = covars_elements[:, :self.n_Gaussians * self.sample_dim
                                     ].reshape(batch_size, self.n_Gaussians, 
-                                              self.data_dim)
+                                              self.sample_dim)
         Cholesky[:, :, d_idx] = torch.exp(log_diagonal)  # ensure positive
         # later elements are on lower triangle
-        lower_tri = covars_elements[:, self.n_Gaussians * self.data_dim:
+        lower_tri = covars_elements[:, self.n_Gaussians * self.sample_dim:
                                     ].reshape(batch_size, self.n_Gaussians,
-                                            self.data_dim * (self.data_dim - 1) // 2)
+                                            self.sample_dim * (self.sample_dim - 1) // 2)
         Cholesky[:, :, l_idx[0], l_idx[1]] = lower_tri
 
         # calculate covariance matrix
         covars = torch.matmul(Cholesky, Cholesky.transpose(-2, -1))
-        covars += torch.eye(self.data_dim) * 1e-4  # ensure positive definiteness
+        covars += torch.eye(self.sample_dim) * 1e-4  # ensure positive definiteness
 
         return mixcoef, means, covars
 
@@ -214,8 +210,8 @@ class CondXDBase(nn.Module):
         covars : torch.Tensor
             The covariances of each Gaussian component in the mixture model,
             built from Cholesky decomposition to ensure positive definiteness.
-            Expected shape is with shape (batch_size, n_Gaussians, data_dim, 
-            data_dim).
+            Expected shape is with shape (batch_size, n_Gaussians, sample_dim, 
+            sample_dim).
 
         Returns
         -------
@@ -232,16 +228,16 @@ class CondXDBase(nn.Module):
 
         return l.sum(axis=(-1, -2))
 
-    def log_prob_GMM(self, data, mixcoef, means, covars, noise=None):
+    def log_prob_GMM(self, sample, mixcoef, means, covars, noise=None):
         """Compute the log likelihood of samples given GMM parameters. A 
-        general algorithm that suits all data and GMM. Also base for computing
-        log likelihood of data given conditional.
+        general algorithm that suits all samples and GMM. Also base for 
+        computing log likelihood of sample given conditional.
 
         Parameters
         ----------
-        data : torch.Tensor
+        sample : torch.Tensor
             Samples that needs to compute log likelihood, with shape 
-            (batch_size, data_dim).
+            (batch_size, sample_dim).
 
         mixcoef : torch.Tensor
             The mixing coefficients for each component of the GMM, with shape
@@ -249,16 +245,16 @@ class CondXDBase(nn.Module):
 
         means : torch.Tensor
             The means of each Gaussian component in the mixture model,
-            with shape (batch_size, n_Gaussians, data_dim).
+            with shape (batch_size, n_Gaussians, sample_dim).
 
         covars : torch.Tensor
             The covariances of each Gaussian component in the mixture model,
-            with shape (batch_size, n_Gaussians, data_dim, data_dim). Built 
-            from Cholesky decomposition to ensure positive definiteness.
+            with shape (batch_size, n_Gaussians, sample_dim, sample_dim). 
+            Built from Cholesky decomposition to ensure positive definiteness.
 
         noise : torch.Tensor (optional, default=None)
             Gaussian noise covariance matrix of every sample, with shape 
-            (batch_size, data_dim, data_dim). If None, no noise is added. 
+            (batch_size, sample_dim, sample_dim). If None, no noise is added. 
 
         Returns
         -------
@@ -272,34 +268,36 @@ class CondXDBase(nn.Module):
         if noise is None:
             noise = torch.zeros_like(covars)
         else:
-            noise = noise[:, None, ...]  # add noise to all Gaussian components
+            noise = noise[:, None, ...]  # Add noise to all Gaussian components
 
         noisy_covars = covars + noise
 
-        # strengthen symmetry
-        noisy_covars = 0.5 * (noisy_covars + noisy_covars.transpose(-1, -2)) 
+        # Strengthen symmetry
+        noisy_covars = 0.5 * (noisy_covars + noisy_covars.transpose(-1, -2))
 
-        # log likelihood of every Gaussian
-        log_resp = mvn(loc=means, covariance_matrix=noisy_covars).log_prob(data[:, None, :])
+        # Log likelihood of every Gaussian
+        log_resp = mvn(loc=means, covariance_matrix=noisy_covars).log_prob(
+            sample[:, None, :]
+        )
 
-        # multiply with mixing coefficients
+        # Multiply with mixing coefficients
         log_resp += torch.log(mixcoef)
 
-        # add up the weighted likelihood
+        # Add up the weighted likelihood
         log_prob_GMM = torch.logsumexp(log_resp, dim=1)
 
         return log_prob_GMM
 
-    def log_prob_conditional(self, data, conditional, noise=None):
+    def log_prob_conditional(self, sample, conditional, noise=None):
         """
         Compute the log likelihood of samples using a GMM predicted by CondXD, 
         which takes the conditionals of the samples as input.
 
         Parameters
         ----------
-        data : torch.Tensor
+        sample : torch.Tensor
             The sample tensor for which log likelihood is to be computed, with
-            shape (batch_size, data_dim).
+            shape (batch_size, sample_dim).
         
         conditional : torch.Tensor
             The conditional input tensor used to generate GMM parameters via 
@@ -307,23 +305,25 @@ class CondXDBase(nn.Module):
         
         noise : torch.Tensor (optional, default=None)
             Gaussian noise covariance matrix of every sample, with shape 
-            (batch_size, data_dim, data_dim). If None, no noise is added.
+            (batch_size, sample_dim, sample_dim). If None, no noise is added.
 
         Returns
         -------
         log_prob : torch.Tensor
-            The computed log likelihood of samples `data' given `conditional', 
+            The computed log likelihood of samples `sample' given `conditional',
             with shape (batch_size, 1). In the output, each element represents 
             the log likelihood loss for a corresponding sample in the batch.
         """
 
         mixcoef, means, covars = self.forward(conditional)
 
-        log_prob = self.log_prob_GMM(data, mixcoef, means, covars, noise=noise)
+        log_prob = self.log_prob_GMM(
+            sample, mixcoef, means, covars, noise=noise
+        )
 
         return log_prob
 
-    def loss(self, data, conditional, noise=None, regularization=False):
+    def loss(self, conditional, sample, noise=None, regularization=False):
         """
         Computes the training loss, which can be either the negative log 
         likelihood of the samples under the GMM parameters predicted by CondXD
@@ -331,17 +331,17 @@ class CondXDBase(nn.Module):
 
         Parameters
         ----------
-        data : torch.Tensor
-            The sample tensor for which the loss is computed, with shape 
-            (batch_size, data_dim). 
-
         conditional : torch.Tensor
             The input conditional tensor used to generate GMM parameters via
             CondXD, with shape (batch_size, conditional_dim). 
 
+        sample : torch.Tensor
+            The sample tensor for which the loss is computed, with shape 
+            (batch_size, sample_dim). 
+
         noise : torch.Tensor (optional, default=None)
             Gaussian noise covariance matrix of every sample, with shape 
-            (batch_size, data_dim, data_dim). If None, no noise is added.
+            (batch_size, sample_dim, sample_dim). If None, no noise is added.
 
         regularization : bool (optional, default=False)
             A flag indicating whether to compute and add the regularization 
@@ -361,7 +361,9 @@ class CondXDBase(nn.Module):
 
         mixcoef, means, covars = self.forward(conditional)
 
-        log_prob_b = self.log_prob_GMM(data, mixcoef, means, covars, noise=noise)
+        log_prob_b = self.log_prob_GMM(
+            sample, mixcoef, means, covars, noise=noise
+        )
 
         if regularization is False:
             train_loss = (-log_prob_b).mean()
@@ -369,60 +371,3 @@ class CondXDBase(nn.Module):
             train_loss = (-log_prob_b + self.reg_loss(covars)).mean()
 
         return train_loss
-
-    def sample(self, conditional, n_per_conditional=1, noise=None):
-        """To draw samples from GMM predicted by CondXD taking conditional
-        input.
-
-        Parameters
-        ----------
-        conditional : torch.Tensor
-            The input conditional tensor based on which the GMM to be sampled 
-            is predicted. The expected shape should be (batch_size, 
-            conditional_dim).
-
-        n_per_conditional : int (optional, default=1)
-            The number of samples to draw per input conditional, resulting in a
-            total of `batch_size * conditional_dim` samples.
-
-        noise : torch.Tensor (optional, default=None)
-            Gaussian noise covariance matrix of every sample, with shape 
-            (batch_size, n_per_conditional, data_dim, data_dim). If None, no 
-            noise is added.
-
-        Returns
-        -------
-        samples : torch.Tensor
-            The drawn samples as a tensor. The shape of the output will depend 
-            on `n_per_conditional` and the model's output sample dimension, 
-            generally expected to be (batch_size, n_per_conditional, data_dim).
-
-        Notes
-        -----
-        This method utilizes the GMM parameters (mixing coefficients, means, 
-        covars) obtained from the forward pass of the input conditionals 
-        through the CondXD model, selects components based on the mixing 
-        coefficients, and generates samples accordingly. Noise covariance can 
-        be added to the covariance matrices if there is Gaussian noise.
-        """
-    
-
-        mixcoef, means, covars = self.forward(conditional)
-        
-        batchsize = conditional.shape[0]
-        draw = multinomial(mixcoef, n_per_conditional, replacement=True)
-        means  = means[:, draw][torch.eye(batchsize).to(torch.bool)]
-        covars = covars[:, draw][torch.eye(batchsize).to(torch.bool)]
-
-        if noise is None:
-            noise = torch.zeros_like(covars)
-        elif noise.dim() != covars.dim():
-            noise = noise[:, None, ...]  # add noise to all components
-
-        noisy_covars = covars + noise
-
-        noisy_covars = 0.5 * (noisy_covars + noisy_covars.transpose(-1, -2))
-
-        data = mvn(loc=means, covariance_matrix=noisy_covars).sample()
-
-        return data
