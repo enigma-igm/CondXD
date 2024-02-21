@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from condxd.model import *
+from deprecate.model import *
 from diagnostics.plots_QSO import *
 
 import seaborn as sns

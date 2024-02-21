@@ -11,7 +11,7 @@ from astropy.table import Table
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from condxd import model
+from deprecate import model
 
 from IPython import embed
 
