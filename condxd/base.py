@@ -317,6 +317,9 @@ class CondXDBase(nn.Module):
             with shape (batch_size, 1). In the output, each element represents 
             the log likelihood loss for a corresponding sample in the batch.
         """
+        sample = torch.Tensor(sample)
+        conditional = torch.Tensor(conditional)
+        noise = torch.Tensor(noise)
 
         mixcoef, means, covars = self.forward(conditional)
 

@@ -8,37 +8,53 @@ import matplotlib.pyplot as plt
 import corner
 import smplotlib
 
-""" 1. Load the data, make it suitable for CondXD """
-cont_table = Table.read(os.path.join(datpath, 'JulienCat_candidates_z6.fits'))
-GMM_params = {'fluxes': ['f_1p2_VIS', 'f_1p2_Y', 'f_1p2_H'],
-              'fluxes_err': ['f_1p2_VIS_err', 'f_1p2_Y_err', 'f_1p2_H_err'],
-              'ref_flux': 'f_1p2_J', 'ref_flux_err': 'f_1p2_J_err',
-              'conditions': ['f_1p2_J',]}
+re_train = False
 
-# get the flux ratio and its covariance
-flux_ratio = qsoutil.get_flux_ratio_from_table(cont_table, GMM_params['fluxes'], GMM_params['ref_flux'])
-mag_cutoff = 23.5 # AB magnitude, the assumption of Gaussian noise is not valid for fainter sources
-flux_cutoff = qsoutil.mag_to_flux(mag_cutoff, zero_point=30.) # zero point for ERO catalog
-flux_ratio_covar = qsoutil.get_flux_ratio_covar_from_table(
-    cont_table, GMM_params['fluxes'], GMM_params['fluxes_err'], GMM_params['ref_flux'], flux_cutoff)
+if re_train:
+    """ 1. Load the data, make it suitable for CondXD """
+    cont_table = Table.read(os.path.join(datpath, 'JulienCat_candidates_z6.fits'))
+    GMM_params = {'fluxes': ['f_1p2_VIS', 'f_1p2_Y', 'f_1p2_H'],
+                'fluxes_err': ['f_1p2_VIS_err', 'f_1p2_Y_err', 'f_1p2_H_err'],
+                'ref_flux': 'f_1p2_J', 'ref_flux_err': 'f_1p2_J_err',
+                'conditions': ['f_1p2_J',]}
 
-# get the conditions
-conditions = qsoutil.get_conditions_from_table(cont_table, GMM_params['conditions'])
-conditions = np.log(conditions)
+    # get the flux ratio and its covariance
+    flux_ratio = qsoutil.get_flux_ratio_from_table(cont_table, GMM_params['fluxes'], GMM_params['ref_flux'])
+    mag_cutoff = 23.5 # AB magnitude, the assumption of Gaussian noise is not valid for fainter sources
+    flux_cutoff = qsoutil.mag_to_flux(mag_cutoff, zero_point=30.) # zero point for ERO catalog
+    flux_ratio_covar = qsoutil.get_flux_ratio_covar_from_table(
+        cont_table, GMM_params['fluxes'], GMM_params['fluxes_err'], GMM_params['ref_flux'], flux_cutoff)
 
-""" 2. Fit the model """
-n_sample, sample_dim = flux_ratio.shape
-_, conditional_dim = conditions.shape
-cont_condxd = CondXD(n_Gaussians=20, sample_dim=sample_dim, conditional_dim=conditional_dim)
-cont_condxd.load_data(conditions, flux_ratio, flux_ratio_covar, 
-                      tra_val_tes_size=(90,10,0), batch_size=10)
-cont_condxd.deconvolve(num_epoch=100)
+    # get the conditions
+    conditions = qsoutil.get_conditions_from_table(cont_table, GMM_params['conditions'])
+    conditions = np.log(conditions)
+
+    """ 2. Fit the model """
+    n_sample, sample_dim = flux_ratio.shape
+    _, conditional_dim = conditions.shape
+    cont_condxd = CondXD(n_Gaussians=20, sample_dim=sample_dim, conditional_dim=conditional_dim)
+    cont_condxd.load_data(conditions, flux_ratio, flux_ratio_covar, 
+                        tra_val_tes_size=(90,10,0), batch_size=10)
+    cont_condxd.deconvolve(num_epoch=100)
+
+    # save flux_ratio, conditions, and flux_ratio_covar
+    np.savez('ero_cont_data.npz', flux_ratio=flux_ratio, conditions=conditions, flux_ratio_covar=flux_ratio_covar)
+    cont_condxd.save(filename='ero_cont.pkl')
+
+else:
+    sample_dim, conditional_dim = 3, 1
+    cont_condxd = CondXD(n_Gaussians=20, sample_dim=sample_dim, conditional_dim=conditional_dim)
+    cont_condxd.load(filename='ero_cont.pkl')
+    dataz = np.load('ero_cont_data.npz')
+    flux_ratio = dataz['flux_ratio']
+    conditions = dataz['conditions']
+    flux_ratio_covar = dataz['flux_ratio_covar']
+
 
 """ 3. Sample from the model """
 flux_ratio_sample = cont_condxd.sample(conditions, n_per_conditional=50)
 flux_ratio_sample = flux_ratio_sample.reshape(-1, sample_dim).detach().numpy()
 
-cont_condxd.save(filename='ero_cont.pkl')
 
 """ 4. Plot the results """
 fig, ax = plt.subplots(3, 3, figsize=(8, 8))
