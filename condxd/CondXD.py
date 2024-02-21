@@ -139,9 +139,9 @@ class CondXD(CondXDBase):
 
 
     def __init__(self,
-                 n_Gaussians=None,
-                 sample_dim=None,
-                 conditional_dim=None):
+                 n_Gaussians,
+                 sample_dim,
+                 conditional_dim):
 
         super(CondXD, self).__init__(n_Gaussians, sample_dim, conditional_dim)
             
@@ -152,7 +152,7 @@ class CondXD(CondXDBase):
         # Setup the optimizer with formatted arguments for readability
         self.optimizer_params = {
             'lr' : 1e-3,
-            'weight_decay' : 0.003
+            'weight_decay' : 0.001
         }
         self.optimizer = torch.optim.Adam(
             self.parameters(),
@@ -258,12 +258,17 @@ class CondXD(CondXDBase):
         cond_tes, sample_tes, noise_tes = splits
 
         # Load data into batches
-        self.dataloader_tra = DataLoader(TensorDataset(cond_tra, sample_tra, 
-                                    noise_tra), batch_size=batch_size, shuffle=True)
-        self.dataloader_val = DataLoader(TensorDataset(cond_val, sample_val, 
-                                    noise_val), batch_size=batch_size, shuffle=False)
-        self.dataloader_tes = DataLoader(TensorDataset(cond_tes, sample_tes, 
-                                    noise_tes), batch_size=batch_size, shuffle=False)
+        self.dataloader_tra = DataLoader(
+                TensorDataset(cond_tra, sample_tra, noise_tra),
+                batch_size=self.batch_size, shuffle=True)
+
+        self.dataloader_val = DataLoader(
+                TensorDataset(cond_val, sample_val, noise_val),
+                batch_size=self.batch_size, shuffle=False)
+
+        self.dataloader_tes = DataLoader(
+                TensorDataset(cond_tes, sample_tes, noise_tes),
+                batch_size=self.batch_size, shuffle=False)
 
 
 
@@ -443,7 +448,8 @@ class CondXD(CondXDBase):
         for epoch in range(self.num_epoch):
             train_loss = self._train_epoch(epoch)
             val_loss = self._validate_epoch(epoch)
-            print(f'Epoch {epoch}, training loss: {train_loss:.5f}, validation loss: {val_loss:.5f}.')
+            print(f"Epoch {epoch}, training loss: {train_loss:.5f}, "
+                  "validation loss: {val_loss:.5f}.")
 
             # Update best model if validation loss is improved
             if val_loss < lowest_loss:
@@ -488,7 +494,7 @@ class CondXD(CondXDBase):
         return avg_loss
 
     def test_model(self, external_cond=None, external_samples=None):
-        """Constructing. Wants to work for external cond and samples.
+        """Under construction. Wants to work for external conds and samples.
 
         Parameters
         ----------
