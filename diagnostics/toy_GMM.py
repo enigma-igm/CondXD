@@ -9,7 +9,7 @@ import torch
 import corner
 
 from IPython import embed
-from condxd.model import mvn
+from deprecate.model import mvn
 
 def covars_ellipse(covars):
     """The parameters of the ellipse of the covariance matrix. Only valid when dimension=2.

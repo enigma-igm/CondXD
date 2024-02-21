@@ -14,7 +14,7 @@ import torch
 from gmmnet.GMM_training import GMM
 from gmmnet.GMM_plots import plot_mag_distribution_data
 
-from condxd import model
+from deprecate import model
 
 from IPython import embed
 

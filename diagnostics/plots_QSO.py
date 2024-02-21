@@ -8,7 +8,7 @@ import corner
 import copy
 
 
-from condxd.model import mvn
+from deprecate.model import mvn
 
 def cornerplots(data_tes, output_tes, labels, bins, ranges, anno, name, noisy=False):
     """Making comparison corner plots of the test set.

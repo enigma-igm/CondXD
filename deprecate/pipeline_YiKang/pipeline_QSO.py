@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from condxd.model import GMMNet
+from deprecate.model import GMMNet
 from diagnostics.plots_QSO import all_figures
 
 from astropy.io import fits
