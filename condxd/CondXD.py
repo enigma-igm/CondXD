@@ -449,7 +449,7 @@ class CondXD(CondXDBase):
             train_loss = self._train_epoch(epoch)
             val_loss = self._validate_epoch(epoch)
             print(f"Epoch {epoch}, training loss: {train_loss:.5f}, "
-                  "validation loss: {val_loss:.5f}.")
+                  f"validation loss: {val_loss:.5f}.")
 
             # Update best model if validation loss is improved
             if val_loss < lowest_loss:
@@ -563,7 +563,6 @@ class CondXD(CondXDBase):
         """
     
         conditional = torch.Tensor(conditional)
-        noise = torch.Tensor(noise)
         
         mixcoef, means, covars = self.forward(conditional)
         
@@ -574,7 +573,9 @@ class CondXD(CondXDBase):
 
         if noise is None:
             noise = torch.zeros_like(covars)
-        elif noise.dim() != covars.dim():
+        else:
+            noise = torch.Tensor(noise)
+        if noise.dim() != covars.dim():
             noise = noise[:, None, ...]  # add noise to all components
 
         noisy_covars = covars + noise
