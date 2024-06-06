@@ -170,7 +170,7 @@ class CondXD(CondXDBase):
         )
 
     def load_data(self, cond, sample, noise=None, tra_val_tes_size=(70, 15, 15),
-                batch_size=500):
+                batch_size=500, seed=1234):
         """
         Loads preprocessed data, then splits it into training, validation,
         and testing sets. Finally, it prepares DataLoader instances for each set
@@ -252,7 +252,7 @@ class CondXD(CondXDBase):
             tra_val_tes_size, n_sample)
 
         # Define cond_tra, sample_tra, self.noise_tra
-        splits = self._split_data(cond, sample, noise)
+        splits = self._split_data(cond, sample, noise, random_seed=seed)
         cond_tra, sample_tra, noise_tra, \
         cond_val, sample_val, noise_val, \
         cond_tes, sample_tes, noise_tes = splits

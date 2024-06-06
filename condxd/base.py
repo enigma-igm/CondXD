@@ -296,6 +296,8 @@ class CondXDBase(nn.Module):
         Compute the log likelihood of samples using a GMM predicted by CondXD, 
         which takes the conditionals of the samples as input.
 
+        log likelihood = log ( p (noisy sample | conditional) )
+
         Parameters
         ----------
         sample : torch.Tensor
