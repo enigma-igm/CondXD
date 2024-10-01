@@ -170,7 +170,7 @@ class CondXD(CondXDBase):
         )
 
     def load_data(self, cond, sample, noise=None, tra_val_tes_size=(70, 15, 15),
-                batch_size=500, seed=1234):
+                  normalize=False, batch_size=500, seed=1234):
         """
         Loads preprocessed data, then splits it into training, validation,
         and testing sets. Finally, it prepares DataLoader instances for each set
@@ -207,6 +207,10 @@ class CondXD(CondXDBase):
             validation, and testing sets, respectively. Values are not required
             to sum to any specific number such as 100. The relative size is 
             when computing the real set size.
+
+        normalize : bool (optional, default=False)
+            If True, the data is normalized to have zero mean and unit variance.
+            Stored in the model's attributes for sampling.
             
         batch_size : int (optional, default=500)
             The number of samples per batch to load during the training, validation,
@@ -256,6 +260,21 @@ class CondXD(CondXDBase):
         cond_tra, sample_tra, noise_tra, \
         cond_val, sample_val, noise_val, \
         cond_tes, sample_tes, noise_tes = splits
+
+        self.norm = normalize
+        if self.norm:
+            # Compute mean and std on training data
+            self.sample_mean = sample_tra.mean(dim=0)
+            self.sample_std = sample_tra.std(dim=0)
+
+            sample_tra = (sample_tra - self.sample_mean) / self.sample_std
+            sample_val = (sample_val - self.sample_mean) / self.sample_std
+            sample_tes = (sample_tes - self.sample_mean) / self.sample_std
+
+            std_outer = torch.outer(self.sample_std, self.sample_std)
+            noise_tra = noise_tra / std_outer
+            noise_val = noise_val / std_outer
+            noise_tes = noise_tes / std_outer
 
         # Load data into batches
         self.dataloader_tra = DataLoader(
@@ -583,6 +602,9 @@ class CondXD(CondXDBase):
         noisy_covars = 0.5 * (noisy_covars + noisy_covars.transpose(-1, -2))
 
         sample = mvn(loc=means, covariance_matrix=noisy_covars).sample()
+
+        if self.norm:
+            sample = sample * self.sample_std + self.sample_mean
 
         return sample
     
