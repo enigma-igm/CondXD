@@ -8,12 +8,14 @@ import torch.distributions as dist
 from torch import multinomial
 from torch.utils.data import DataLoader, TensorDataset
 from .base import CondXDBase
+from .pypmsgs import Messages
 
 from IPython import embed
 
 __all__ = ['CondXD']
 
 mvn = dist.multivariate_normal.MultivariateNormal
+msgs = Messages()
 
 class CondXD(CondXDBase):
 
@@ -169,6 +171,11 @@ class CondXD(CondXDBase):
             **self.scheduler_params
         )
 
+        msgs.info(f'CondXD model initialized with {n_Gaussians} Gaussians, '
+                    f'{sample_dim} sample dimension, and {conditional_dim} conditional dimension.') 
+        msgs.info(f'Optimizer: Adam(lr={self.optimizer_params["lr"]}, '
+                    f'weight_decay={self.optimizer_params["weight_decay"]})')
+
     def load_data(self, cond, sample, noise=None, tra_val_tes_size=(70, 15, 15),
                   normalize=False, batch_size=500, seed=1234):
         """
@@ -236,6 +243,17 @@ class CondXD(CondXDBase):
         sample = torch.Tensor(sample)
         noise = torch.Tensor(noise)
 
+        self.sample_mean = torch.mean(sample, dim=0)
+        self.sample_std = torch.std(sample, dim=0)
+
+        self.norm = normalize
+        if self.norm:
+            sample = (sample - self.sample_mean) / self.sample_std
+            noise = noise / torch.outer(self.sample_std, self.sample_std)
+            msgs.info('Use normalized data.')
+        else:
+            msgs.info('Use raw data (not normalized).')
+
         # Check dimension match
         n_cond, dim_cond = cond.shape
         n_sample, dim_sample = sample.shape
@@ -260,21 +278,6 @@ class CondXD(CondXDBase):
         cond_tra, sample_tra, noise_tra, \
         cond_val, sample_val, noise_val, \
         cond_tes, sample_tes, noise_tes = splits
-
-        self.norm = normalize
-        if self.norm:
-            # Compute mean and std on training data
-            self.sample_mean = sample_tra.mean(dim=0)
-            self.sample_std = sample_tra.std(dim=0)
-
-            sample_tra = (sample_tra - self.sample_mean) / self.sample_std
-            sample_val = (sample_val - self.sample_mean) / self.sample_std
-            sample_tes = (sample_tes - self.sample_mean) / self.sample_std
-
-            std_outer = torch.outer(self.sample_std, self.sample_std)
-            noise_tra = noise_tra / std_outer
-            noise_val = noise_val / std_outer
-            noise_tes = noise_tes / std_outer
 
         # Load data into batches
         self.dataloader_tra = DataLoader(
@@ -619,7 +622,14 @@ class CondXD(CondXDBase):
         if filename is None:
             filename = 'CondXD_params.pkl'
 
-        torch.save(self.state_dict(), filename)
+        save_dict = {
+            'state_dict' : self.state_dict(),
+            'sample_mean' : self.sample_mean,
+            'sample_std' : self.sample_std,
+            'norm' : self.norm
+        }
+        torch.save(save_dict, filename)
+        # torch.save(self.state_dict(), filename)
     
     def load(self, filename):
         """Load the model from a file.
@@ -629,5 +639,72 @@ class CondXD(CondXDBase):
         filename : str
             The name of the file to load the model from.
         """
-        self.load_state_dict(torch.load(filename))
+        save_dict = torch.load(filename)
+        self.load_state_dict(save_dict['state_dict'])
+        self.sample_mean = save_dict['sample_mean']
+        self.sample_std = save_dict['sample_std']
+        self.norm = save_dict['norm']
         self.eval()
+        msgs.info(f'Model loaded from {filename}. Mean: {self.sample_mean}, Std: {self.sample_std}.')
+
+    def log_prob_conditional(self, sample, conditional, noise=None, skip_norm=False):
+        """
+        Compute the log likelihood of samples using a GMM predicted by CondXD, 
+        which takes the conditionals of the samples as input.
+
+        log likelihood = log ( p (noisy sample | conditional) )
+
+        Parameters
+        ----------
+        sample : torch.Tensor
+            The sample tensor for which log likelihood is to be computed, with
+            shape (batch_size, sample_dim).
+        
+        conditional : torch.Tensor
+            The conditional input tensor used to generate GMM parameters via 
+            CondXD, with shape (batch_size, conditional_dim).
+        
+        noise : torch.Tensor (optional, default=None)
+            Gaussian noise covariance matrix of every sample, with shape 
+            (batch_size, sample_dim, sample_dim). If None, no noise is added.
+
+        Returns
+        -------
+        log_prob : torch.Tensor
+            The computed log likelihood of samples `sample' given `conditional',
+            with shape (batch_size, 1). In the output, each element represents 
+            the log likelihood loss for a corresponding sample in the batch.
+        """
+        sample = torch.Tensor(sample)
+        conditional = torch.Tensor(conditional)
+        noise = torch.Tensor(noise)
+
+        if skip_norm:
+            norm = False
+        else:
+            norm = self.norm
+
+        if norm:
+            sample = (sample - self.sample_mean) / self.sample_std
+            noise = noise / torch.outer(self.sample_std, self.sample_std)
+
+        mixcoef, means, covars = self.forward(conditional)
+
+        log_prob = self.log_prob_GMM(
+            sample, mixcoef, means, covars, noise=noise
+        )
+
+        if norm:
+            log_prob = log_prob - torch.sum(torch.log(self.sample_std))
+
+        return log_prob
+    
+    def _de_norm(self, sample, noise):
+        _sample = sample * self.sample_std + self.sample_mean
+        _noise = noise * torch.outer(self.sample_std, self.sample_std)
+        return _sample, _noise
+    
+    def _norm(self, sample, noise):
+        _sample = (sample - self.sample_mean) / self.sample_std
+        _noise = noise / torch.outer(self.sample_std, self.sample_std)
+        return _sample, _noise
