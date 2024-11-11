@@ -373,7 +373,7 @@ class CondXD(CondXDBase):
             self.optimizer_params.update(optimizer_params)
         # Use the current optimizer class if none is provided
         if optimizer_class is None:
-            optimizer_class = type(self._optimizer)
+            optimizer_class = type(self.optimizer)
         # Update the optimizer
         self.optimizer = optimizer_class(
             self.parameters(),
@@ -381,6 +381,8 @@ class CondXD(CondXDBase):
         )
         # Since the optimizer has changed, reinitialize the scheduler with the updated optimizer
         self.update_scheduler()
+
+        msgs.info(f'Optimizer updated to {optimizer_class} with parameters: {optimizer_params}')
 
     def update_scheduler(self, scheduler_class=None, **scheduler_params):
         """
@@ -415,7 +417,7 @@ class CondXD(CondXDBase):
             self.scheduler_params.update(scheduler_params)
         # Use the current scheduler class if none is provided
         if scheduler_class is None:
-            scheduler_class = type(self._scheduler)
+            scheduler_class = type(self.scheduler)
         # Update the scheduler
         self.scheduler = scheduler_class(
             self.optimizer,
