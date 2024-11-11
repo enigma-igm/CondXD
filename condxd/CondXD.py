@@ -685,8 +685,7 @@ class CondXD(CondXDBase):
             norm = self.norm
 
         if norm:
-            sample = (sample - self.sample_mean) / self.sample_std
-            noise = noise / torch.outer(self.sample_std, self.sample_std)
+            sample, noise = self._norm(sample, noise)
 
         mixcoef, means, covars = self.forward(conditional)
 
