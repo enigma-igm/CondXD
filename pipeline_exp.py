@@ -3,16 +3,21 @@ import copy
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from data.experiment import data_load
 from condxd.model import GMMNet
 from diagnostics.plots_exp import exp_figures
-# export PYTHONPATH="${PYTHONPATH}:mypath/extreme-deconvolution/py"
+
 # to install extreme-deconvolution: run `export LIBRARY_PATH=/usr/local/Cellar/gsl/2.7.1/lib/` 
 # in the terminal before `make`
 from xdgmm import XDGMM
+try:
+    from extreme_deconvolution import extreme_deconvolution as bovyXD
+except ImportError:
+    print('RUN export PYTHONPATH="${PYTHONPATH}:mypath/extreme-deconvolution/py"')
 
 
 
@@ -50,6 +55,14 @@ for seed in seed_list:
                                                     noisy=True, seed0=seed)
     cond_v, _, _, _, data_v, noise_v, _ = data_load(N_v, K, D, D_cond, 
                                                     noisy=True, seed0=seed)
+    
+    data_avg = np.mean(np.concatenate([data_t, data_v]), axis=0)
+    data_std = np.std(np.concatenate([data_t, data_v]), axis=0)
+    
+    data_t = (data_t - data_avg) / data_std
+    data_v = (data_v - data_avg) / data_std
+    noise_t = noise_t / np.outer(data_std, data_std)
+    noise_v = noise_v / np.outer(data_std, data_std)
 
     cond_t = torch.FloatTensor(cond_t)
     data_t = torch.FloatTensor(data_t)
@@ -86,44 +99,42 @@ for seed in seed_list:
     best_model  = copy.deepcopy(CondXD)
     train_loss_list = np.ones(epoch) * np.nan
     valid_loss_list = np.ones(epoch) * np.nan
+    
     for n in range(epoch):
-        try:
-            # training
-            CondXD.train()
-            train_loss = 0
-            for i, (cond_i, data_i, noise_i) in enumerate(train_loader):
-                optimizer.zero_grad()
-                loss = CondXD.loss(data_i, cond_i, noise=noise_i, regression=True)
-                train_loss += loss
 
-                # backward and update parameters
-                loss.backward()
-                optimizer.step()
+        # training
+        CondXD.train()
+        train_loss = 0
+        for i, (cond_i, data_i, noise_i) in enumerate(train_loader):
+            optimizer.zero_grad()
+            loss = CondXD.loss(data_i, cond_i, noise=noise_i, regression=True)
+            train_loss += loss
+
+            # backward and update parameters
+            loss.backward()
+            optimizer.step()
             
-            train_loss = train_loss / N_t
-            train_loss_list[n] = train_loss
-            print('Epoch', (n+1), 'Training loss', train_loss.item())
-            scheduler.step(train_loss)
+        train_loss = train_loss / N_t
+        train_loss_list[n] = train_loss
+        print('Epoch', (n+1), 'Training loss', train_loss.item())
+        scheduler.step(train_loss)
 
-            # validation
-            CondXD.eval()
-            val_loss = 0
-            for i, (cond_i, data_i, noise_i) in enumerate(valid_loader):
-                optimizer.zero_grad()
-                loss = CondXD.loss(data_i, cond_i, noise=noise_i, regression=True)
-                val_loss += loss
-            
-            val_loss = val_loss / N_v
-            valid_loss_list[n] = val_loss
-            print('Epoch', (n+1), 'Validation loss', val_loss.item())
-            if val_loss < lowest_loss:
-                lowest_loss = val_loss
-                best_model  = copy.deepcopy(CondXD)
-                torch.save(best_model.state_dict(),
-                            param_path+'params.pkl')
-
-        except KeyboardInterrupt:
-            break
+        # validation
+        CondXD.eval()
+        val_loss = 0
+        for i, (cond_i, data_i, noise_i) in enumerate(valid_loader):
+            optimizer.zero_grad()
+            loss = CondXD.loss(data_i, cond_i, noise=noise_i, regression=True)
+            val_loss += loss
+        
+        val_loss = val_loss / N_v
+        valid_loss_list[n] = val_loss
+        print('Epoch', (n+1), 'Validation loss', val_loss.item())
+        if val_loss < lowest_loss:
+            lowest_loss = val_loss
+            best_model  = copy.deepcopy(CondXD)
+            torch.save(best_model.state_dict(),
+                        param_path+'params.pkl')
     
     
     # old binning method
@@ -157,8 +168,9 @@ for seed in seed_list:
 
     KL_div, cond = exp_figures(D_cond, K, D, 
                             train_loss_list, valid_loss_list,
-                            best_model, cond_bin_edges, fig_path, seed,
-                            binXD=xd_list)
+                            best_model, data_avg, data_std,
+                            cond_bin_edges, fig_path, seed,
+                            binXD=xd_list, save_sample=True)
     KL_div_list = np.append(KL_div_list, KL_div)
 
 
@@ -179,11 +191,8 @@ KL_div_mean = KL_div_np.mean(axis=0)
 KL_div_std  = KL_div_np.std(axis=0)
 
 # plotting KL divergence vs conditional
-import matplotlib.pyplot as plt
 plt.close('all')
 
-# from IPython import embed
-# embed(header='Now adjust the KL-Div figure.')
 fig, ax = plt.subplots()
 
 '''
@@ -194,31 +203,42 @@ linetypes = ['$D_\mathrm{KL}$(underlying | deconvolved fitted)',
 linetypes = ['$D_\mathrm{KL, deconvolved}$',
             '$D_\mathrm{KL, noisy}$']
 linestyles = ['solid', 'dashed', '-.']
+colors = ['tab:red', 'tab:blue']
 methods = ['', '']
 if xd_list is not None:
     methods = [', CondXD', ', bin-XD']
 
-for i in [0, 1]:
-    ax.plot(cond, KL_div_mean[i], label=linetypes[i]+methods[0], linestyle=linestyles[i], color='tab:red')
-    ax.fill_between(cond, KL_div_mean[i]-KL_div_std[i], KL_div_mean[i]+KL_div_std[i],
-                    facecolor='tab:red', alpha=0.5)
-i = 2
-ax.plot(cond, KL_div_mean[i], linestyle=linestyles[i], color='tab:red')
-ax.fill_between(cond, KL_div_mean[i]-KL_div_std[i], KL_div_mean[i]+KL_div_std[i],
-                facecolor='tab:red', alpha=0.5)
-ax.annotate('Estimated Max $D_\mathrm{KL}$'+methods[0], xy=(0.27,2.55), color='tab:red',fontsize=12.5)
+
+for i, id in enumerate([0, 3]):
+    ax.plot(cond, KL_div_mean[id], label=linetypes[0]+methods[i], 
+            linestyle=linestyles[0], color=colors[i])
+    ax.fill_between(cond, KL_div_mean[id]-KL_div_std[id], 
+                    KL_div_mean[id]+KL_div_std[id],
+                    facecolor=colors[i], alpha=0.35)
 
 if xd_list is not None:
-    for i in [3, 4]: # not play maximum estimation of bin-XD
-        ax.plot(cond, KL_div_mean[i], label=linetypes[i-3]+methods[1], linestyle=linestyles[i-3], color='tab:blue')
-        ax.fill_between(cond, KL_div_mean[i]-KL_div_std[i], KL_div_mean[i]+KL_div_std[i],
-                        facecolor='tab:blue', alpha=0.35)
-    ax.legend(fontsize=12.5, frameon=False)
+    for i, id in enumerate([1, 4]): 
+        ax.plot(cond, KL_div_mean[id], label=linetypes[1]+methods[i], 
+                linestyle=linestyles[1], color=colors[i])
+        ax.fill_between(cond, KL_div_mean[id]-KL_div_std[id], 
+                        KL_div_mean[id]+KL_div_std[id],
+                        facecolor=colors[i], alpha=0.35)
+
+id = 2
+ax.plot(cond, KL_div_mean[id], label='Estimated Max $D_\mathrm{KL}$'+methods[0],
+        linestyle=linestyles[2], color='tab:red')
+ax.fill_between(cond, KL_div_mean[id]-KL_div_std[id], 
+                KL_div_mean[id]+KL_div_std[id],
+                facecolor='tab:red', alpha=0.5)
+# ax.annotate('Estimated Max $D_\mathrm{KL}$'+methods[0], xy=(0.27,2.55), 
+#             color='tab:red',fontsize=12.5)
+
+ax.legend(fontsize=12.5, frameon=False)
 
 ax.set_xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
-ax.set_xlabel('Conditional c', fontsize=14)
+ax.set_xlabel('Conditioning Variable $c$', fontsize=14)
 ax.set_ylabel('$D_\mathrm{KL}$', fontsize=14)
 fig.savefig('figs/experiment/KLDiv_mean.pdf')
 plt.close()
 
-np.save('random_seed', KL_div_list)
+np.save('KL_div_list', KL_div_list)
