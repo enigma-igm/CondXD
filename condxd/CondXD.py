@@ -38,10 +38,6 @@ class CondXD(CondXDBase):
     conditional_dim : int
         The dimensionality of the conditional data.
 
-    output_path : str (optional, default=None)
-        The path where the CondXD model is to be saved.
-        If not provided, the model is not saved by default.
-
     Attributes
     ----------
     model : CondXDBase
