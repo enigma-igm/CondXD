@@ -24,14 +24,14 @@ GMM_params = {
     # Set the folder path to read the input table
     'path': 'data',
     # Set the input table name with the data
-    'table_name': 'VIKING_catalog.fits',
+    'table_name': 'VIKING_catalog_clean_nobright.fits',
     # Set the reference flux and its error
-    'ref_flux': 'f_J',
-    'ref_flux_err': 'f_J_err',
+    'ref_flux': 'J_flux_aper_3p0',
+    'ref_flux_err': 'J_flux_aper_3p0',
     # Set the fluxes for the real data
-    'fluxes': ['f_z', 'f_Y', 'f_H', 'f_Ks', 'f_w1', 'f_w2'],
+    'fluxes': ['flux_z', 'Y_flux_aper_3p0', 'H_flux_aper_3p0', 'K_flux_aper_3p0', 'flux_w1', 'flux_w2'],
     # Set the relative data errors
-    'fluxes_err': ['f_z_err', 'f_Y_err', 'f_H_err', 'f_Ks_err', 'f_w1_err', 'f_w2_err'],
+    'fluxes_err': ['flux_z_err', 'Y_flux_aper_err_3p0', 'H_flux_aper_err_3p0', 'K_flux_aper_err_3p0', 'flux_w1_err', 'flux_w2_err'],
 }
 
 start_time = time.time()
