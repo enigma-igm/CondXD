@@ -9,8 +9,6 @@ from torch import multinomial
 
 mvn = dist.multivariate_normal.MultivariateNormal
 
-from IPython import embed
-
 
 class GMMNet(nn.Module):
     """Neural network for Gaussian Mixture Model"""
