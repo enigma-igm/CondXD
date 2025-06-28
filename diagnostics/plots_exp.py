@@ -179,7 +179,7 @@ def density_comp_3(data_deconvolved, data_clean, data_noisy, label, nbins, condi
     D = data_deconvolved.shape[-1]
 
     figure = corner.corner(data_noisy, bins=nbins, range=ranges,
-                        color='grey', labels=label, label_kwargs=dict(fontsize=16))
+                        color='darkorange', labels=label, label_kwargs=dict(fontsize=16))
     if ranges is None:
         ranges = get_ranges(figure) # keeping the same range and bins
     corner.corner(data_clean, bins=nbins, range=ranges, fig=figure, 
@@ -195,7 +195,7 @@ def density_comp_3(data_deconvolved, data_clean, data_noisy, label, nbins, condi
         ax.tick_params(axis='both', direction='in', labelsize=12)
     
     # setting annotates
-    axes[1, -3].text(0.6, 1.3, 'conditional $\mathbf{c}$'+f'={conditional:.2f}',
+    axes[1, -3].text(0.6, 1.3, 'cond $\mathbf{c}$'+f'={conditional:.2f}',
                     fontsize=40, horizontalalignment='center', c='black', weight='bold')
     axes[1, -3].text(0.6, 0.8, label_noisy,
                     fontsize=25, horizontalalignment='center', c='grey', weight='bold')
@@ -248,7 +248,7 @@ def deconv_comp(data_r, data_p, label, nbins, conditional, path, ranges=None):
 
 
 # K-L divergence plot
-def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
+def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy, data_avg, data_std,
                 weights_r, means_r, covars_r, noise,
                 CondXD, cond_bin_edges, path,
                 binXD=None):
@@ -289,7 +289,12 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
     covars_r  = torch.FloatTensor(covars_r)
     noise     = torch.FloatTensor(noise)
     weights_p, means_p, covars_p = CondXD(torch.FloatTensor(cond).reshape(-1,1))
-    
+    data_avg = torch.FloatTensor(data_avg)
+    data_std = torch.FloatTensor(data_std)
+    means_p = means_p * data_std + data_avg
+    covars_p = covars_p * torch.outer(data_std, data_std)
+
+
     
     for i in range(L):
 
@@ -307,17 +312,35 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
         covars_p_i  = covars_p[bin_filter]
 
         # for the deconvolved model
-        logp_r_clean = CondXD.log_prob_GMM(torch.FloatTensor(data_r_clean_i), 
-                                        weights_r_i, means_r_i, covars_r_i).detach().numpy()
-        logp_p_clean = CondXD.log_prob_GMM(torch.FloatTensor(data_r_clean_i),
-                                        weights_p_i, means_p_i, covars_p_i).detach().numpy()
+        logp_r_clean = CondXD.log_prob_GMM(
+            torch.FloatTensor(data_r_clean_i), 
+            weights_r_i, 
+            means_r_i, 
+            covars_r_i
+        ).detach().numpy()
+        logp_p_clean = CondXD.log_prob_GMM(
+            torch.FloatTensor(data_r_clean_i),
+            weights_p_i, 
+            means_p_i, 
+            covars_p_i
+        ).detach().numpy()
         KL_div_clean[i] = (logp_r_clean - logp_p_clean).mean()
 
         # for the noise convolved model
-        logp_r_noisy = CondXD.log_prob_GMM(torch.FloatTensor(data_r_noisy_i), 
-                                        weights_r_i, means_r_i, covars_r_i, noise=noise_i).detach().numpy()
-        logp_p_noisy = CondXD.log_prob_GMM(torch.FloatTensor(data_r_noisy_i), 
-                                        weights_p_i, means_p_i, covars_p_i, noise=noise_i).detach().numpy()
+        logp_r_noisy = CondXD.log_prob_GMM(
+            torch.FloatTensor(data_r_noisy_i), 
+            weights_r_i, 
+            means_r_i, 
+            covars_r_i, 
+            noise=noise_i
+            ).detach().numpy()
+        logp_p_noisy = CondXD.log_prob_GMM(
+            torch.FloatTensor(data_r_noisy_i), 
+            weights_p_i, 
+            means_p_i, 
+            covars_p_i, 
+            noise=noise_i
+        ).detach().numpy()
         KL_div_noisy[i] = (logp_r_noisy - logp_p_noisy).mean()
 
         # probability of deconvolved samples on noise convolved model
@@ -329,8 +352,8 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
         # KL divergence plot for the old binXD method
         if binXD is not None:
             weights_p_i = torch.FloatTensor(binXD[i].weights)
-            means_p_i   = torch.FloatTensor(binXD[i].mu)
-            covars_p_i  = torch.FloatTensor(binXD[i].V)
+            means_p_i   = torch.FloatTensor(binXD[i].mu) * data_std + data_avg
+            covars_p_i  = torch.FloatTensor(binXD[i].V) * torch.outer(data_std, data_std)
             
             # for the deconvolved model
             logp_p_clean = CondXD.log_prob_GMM(torch.FloatTensor(data_r_clean_i),
@@ -370,9 +393,9 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
         # not do maximum estimation of bin-XD
         ax.legend(fontsize=10, frameon=False)
     ax.set_xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
-    ax.set_xlabel('Conditional Parameter c', fontsize=14)
+    ax.set_xlabel('Conditioning Variable c', fontsize=14)
     ax.set_ylabel('$D_\mathrm{KL}$', fontsize=14)
-    ax.set_title('KL Divergence vs Conditional', fontsize=16)
+    ax.set_title('KL Divergence vs Conditioing Variable', fontsize=16)
     fig.savefig(path+'KLDiv.pdf')
 
     plt.close()
@@ -390,7 +413,8 @@ def KLdiv_figure(D_cond, cond, data_r_clean, data_r_noisy,
 
 
 # main function
-def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_edges, path, seed, binXD=None):
+def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, data_avg, data_std,
+                cond_bin_edges, path, seed, binXD=None, save_sample=False):
     """Visualization of the experiment result. Only valid when D_cond=1. Output plots to figs/experiment/.
 
     Args:
@@ -434,16 +458,16 @@ def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_
 
     # global comparison
     # comparing weights
-    weights_comp(cond.flatten(), weights_r, weights_p, path)
+    # weights_comp(cond.flatten(), weights_r, weights_p, path)
 
 
     # comparing means
-    means_comp(cond.flatten(), means_r, means_p, path)
+    # means_comp(cond.flatten(), means_r, means_p, path)
 
 
     # comparing covars
     num = 4
-    covars_comp(cond, covars_r, covars_p, num, path)
+    # covars_comp(cond, covars_r, covars_p, num, path)
 
 
     # density comparison at specific conditionals. corner plots.
@@ -452,14 +476,17 @@ def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_
         N_data = 10000
         data_r_clean = sample_func(weights_r[j], means_r[j], covars_r[j], N=N_data)[0]
         data_p_clean = model.sample(torch.FloatTensor(cond[j]).unsqueeze(0), N_data).squeeze().numpy()
+        data_p_clean = data_p_clean * data_std + data_avg
         noise = np.zeros((N_data, D, D))
         data_r_noisy = np.zeros((N_data, D))
         data_p_noisy = np.zeros((N_data, D))
         for i in range(N_data):
             noise[i] = noise_func(cond[j], D, sigma_d=1., sigma_l=0.5)
             data_r_noisy[i] = sample_func(weights_r[j], means_r[j], covars_r[j], noise=noise[i])[0]
+            noise_norm_i = noise[i] / np.outer(data_std, data_std)
             data_p_noisy[i] = model.sample(torch.FloatTensor(cond[j]).unsqueeze(0), 1, 
-                                            torch.FloatTensor(noise[i]).unsqueeze(0)).squeeze().numpy()
+                                            torch.FloatTensor(noise_norm_i).unsqueeze(0)).squeeze().numpy()
+        data_p_noisy = data_p_noisy * data_std + data_avg
 
         # corner plots parameters
         label = [f'Dim. {i+1}' for i in range(D)]
@@ -480,6 +507,11 @@ def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_
         
         del figure
 
+        if save_sample:
+            np.save(path+f'data_r_clean_{conditional:.1f}.npy', data_r_clean)
+            np.save(path+f'data_p_clean_{conditional:.1f}.npy', data_p_clean)
+            np.save(path+f'data_r_noisy_{conditional:.1f}.npy', data_r_noisy)
+            np.save(path+f'data_p_noisy_{conditional:.1f}.npy', data_p_noisy)
 
 
 
@@ -505,7 +537,7 @@ def exp_figures(D_cond, K, D, train_loss_list, valid_loss_list, model, cond_bin_
         data_r_noisy[i] = sample_func(weights_r[i], means_r[i], covars_r[i], noise=noise[i])[0]
         
     KL_div = KLdiv_figure(D_cond, cond.flatten(),
-                        data_r_clean, data_r_noisy,
+                        data_r_clean, data_r_noisy, data_avg, data_std,
                         weights_r, means_r, covars_r, noise,
                         model, cond_bin_edges, path,
                         binXD=binXD)
