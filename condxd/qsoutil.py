@@ -8,7 +8,7 @@ from IPython import embed
 def table2array(table):
     return np.lib.recfunctions.structured_to_unstructured(np.array(table))
 
-def flux_to_mag(flux, zero_point):
+def flux_to_mag(flux, zero_point=22.5):
     """
     Convert flux to magnitude
 
@@ -21,7 +21,7 @@ def flux_to_mag(flux, zero_point):
     """
     return zero_point - 2.5 * np.log10(flux)
 
-def mag_to_flux(mag, zero_point):
+def mag_to_flux(mag, zero_point=22.5):
     """
     Convert magnitude to flux
 
