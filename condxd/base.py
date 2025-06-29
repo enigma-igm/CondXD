@@ -291,16 +291,16 @@ class CondXDBase(nn.Module):
 
         return log_prob_GMM
 
-    def log_prob_conditional(self, sample, conditional, noise=None):
+    def log_prob_conditional(self, sample_n, conditional, noise=None):
         """
         Compute the log likelihood of samples using a GMM predicted by CondXD, 
         which takes the conditionals of the samples as input.
 
         Parameters
         ----------
-        sample : torch.Tensor
-            The sample tensor for which log likelihood is to be computed, with
-            shape (batch_size, sample_dim).
+        sample_n : torch.Tensor
+            The normalized sample tensor for which log likelihood is to be 
+            computed, with shape (batch_size, sample_dim).
         
         conditional : torch.Tensor
             The conditional input tensor used to generate GMM parameters via 
@@ -321,12 +321,12 @@ class CondXDBase(nn.Module):
         mixcoef, means, covars = self.forward(conditional)
 
         log_prob = self.log_prob_GMM(
-            sample, mixcoef, means, covars, noise=noise
+            sample_n, mixcoef, means, covars, noise=noise
         )
 
         return log_prob
 
-    def loss(self, conditional, sample, noise=None, regularization=False):
+    def loss(self, conditional, sample_n, noise=None, regularization=False):
         """
         Computes the training loss, which can be either the negative log 
         likelihood of the samples under the GMM parameters predicted by CondXD
@@ -338,9 +338,9 @@ class CondXDBase(nn.Module):
             The input conditional tensor used to generate GMM parameters via
             CondXD, with shape (batch_size, conditional_dim). 
 
-        sample : torch.Tensor
-            The sample tensor for which the loss is computed, with shape 
-            (batch_size, sample_dim). 
+        sample_n : torch.Tensor
+            The normalized sample tensor for which the loss is computed, with 
+            shape (batch_size, sample_dim). 
 
         noise : torch.Tensor (optional, default=None)
             Gaussian noise covariance matrix of every sample, with shape 
@@ -365,7 +365,7 @@ class CondXDBase(nn.Module):
         mixcoef, means, covars = self.forward(conditional)
 
         log_prob_b = self.log_prob_GMM(
-            sample, mixcoef, means, covars, noise=noise
+            sample_n, mixcoef, means, covars, noise=noise
         )
 
         if regularization is False:
