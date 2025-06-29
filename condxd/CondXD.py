@@ -1,5 +1,6 @@
 import os
 import copy
+import pickle
 
 import numpy as np
 
@@ -77,6 +78,9 @@ class CondXD(CondXDBase):
         The actual sizes of the training, validation, and test datasets,
         calculated from the `tra_val_tes_size` input and the total number of samples.
         Only available after running the method load_data(cond, sample, noise...).
+
+    data_avg, data_std : torch.Tensor
+        The average and standard deviation of the sample data, used for normalization.
     
     batch_size : int
         The number of samples per batch to load during the training, validation,
@@ -86,7 +90,7 @@ class CondXD(CondXDBase):
 
     Methods
     -------
-    load_data(cond, sample, noise, tra_val_tes_size=(70, 15, 15), batch_size=500)
+    load_data(cond, sample, noise, tra_val_tes_size=(81, 9, 10), batch_size=500)
         Loads and preprocesses the data, splits it into training, validation,
         and testing sets, and prepares DataLoaders for training and evaluation.
         See details in this method.
@@ -101,7 +105,7 @@ class CondXD(CondXDBase):
 
     deconvolve(num_epoch=None)
         Trains the model for a specified number of epochs, evaluates it on
-        the validation set, and saves the best performing model.
+        the validation set, and keeps the best performing NN weights.
 
     sample(conditional, n_per_conditional=1, noise=None):
         Draws samples from GMM predicted by CondXD inputing conditional.
@@ -125,11 +129,11 @@ class CondXD(CondXDBase):
     >>> condxd.load_data(cond_data, sample_data, noise_data)
     >>> condxd.deconvolve()
     >>> samples = condxd.sample(cond_data, n_per_conditional=50)
-    >>> condxd.save(filename='condxd_model.pkl')
+    >>> condxd.save_NN(filename='condxd_weights.pkl')
 
     If you want to load a trained model and sample from it:
     >>> condxd = CondXD(n_Gaussians=3, sample_dim=2, conditional_dim=2)
-    >>> condxd.load('condxd_model.pkl')
+    >>> condxd.load('condxd_weights.pkl')
     >>> samples = condxd.sample(cond_data, n_per_conditional=50)
     """
 
@@ -409,13 +413,13 @@ class CondXD(CondXDBase):
 
     def deconvolve(self, num_epoch=100):
         """
-        Trains the model for a specified number of epochs. During each epoch, the
-        method performs training on the training dataset and evaluates the model on
-        the validation dataset. It also tracks and prints the training and validation
-        loss for each epoch. The best model, determined by the lowest validation loss,
-        is saved if an output path is provided. After training, if a test set is 
-        provided the method evaluates the model on the test dataset and prints the 
-        final test loss.
+        Trains the model for a specified number of epochs. During each epoch, 
+        the method performs training on the training dataset and evaluates the
+        model on the validation dataset. It also tracks and prints the training
+        and validation loss for each epoch. The best model, determined by the
+        lowest validation loss, is kept. After training, if a test set is 
+        provided the method evaluates the model on the test dataset and prints 
+        the final test loss.
 
         Parameters
         ----------
@@ -598,26 +602,41 @@ class CondXD(CondXDBase):
 
         return sample
     
-    def save(self, filename=None):
-        """Save the model to a file.
+    def save_NN(self, filename=None):
+        """Save the NN architecture weights to a file.
 
         Parameters
         ----------
         filename : str
-            The name of the file to save the model as (including path).
+            The name of the file to save the NN weights as (including path).
         """
         if filename is None:
-            filename = 'CondXD_params.pkl'
+            filename = 'CondXD_weights.pkl'
 
         torch.save(self.state_dict(), filename)
     
-    def load(self, filename):
-        """Load the model from a file.
+    def load_NN(self, filename):
+        """Load the NN architecture weights from a file.
 
         Parameters
         ----------
         filename : str
-            The name of the file to load the model from.
+            The name of the file to load the NN weights from.
         """
         self.load_state_dict(torch.load(filename))
         self.eval()
+
+
+    def save(self, filename=None):
+        """Save the entire CondXD model to a file using pickle.
+
+        Parameters
+        ----------
+        filename : str, optional
+            The name of the file to save the model as (including path).
+            If None, defaults to 'CondXD_full_model.pkl'.
+        """
+        if filename is None:
+            filename = 'CondXD_full_model.pkl'
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
