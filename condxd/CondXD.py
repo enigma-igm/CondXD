@@ -134,10 +134,12 @@ class CondXD(CondXDBase):
     """
 
 
-    def __init__(self,
-                 n_Gaussians,
-                 sample_dim,
-                 conditional_dim):
+    def __init__(
+            self,
+            n_Gaussians,
+            sample_dim,
+            conditional_dim
+        ):
 
         super(CondXD, self).__init__(n_Gaussians, sample_dim, conditional_dim)
             
@@ -165,7 +167,7 @@ class CondXD(CondXDBase):
             **self.scheduler_params
         )
 
-    def load_data(self, cond, sample, noise=None, tra_val_tes_size=(70, 15, 15),
+    def load_data(self, cond, sample, noise=None, tra_val_tes_size=(81, 9, 10),
                 batch_size=500):
         """
         Loads preprocessed data, then splits it into training, validation,
@@ -194,15 +196,15 @@ class CondXD(CondXDBase):
             also be provided to `noise'.
             
         noise : array-like (optional, default=None)
-            The noise covariance matrix  associated with each sample. Shape 
+            The noise covariance matrix associated with each sample. Shape 
             should be (n_samples, sample_dim, sample_dim) to match the dimensions
             of the sample data.
             
-        tra_val_tes_size : tuple of int (optional, default=(70, 15, 15))
+        tra_val_tes_size : tuple of int (optional, default=(81, 9, 10))
             The proportions of the dataset to be allocated to the training,
             validation, and testing sets, respectively. Values are not required
-            to sum to any specific number such as 100. The relative size is 
-            when computing the real set size.
+            to sum to any specific number such as 100. The relative size is
+            used when computing the real set size.
             
         batch_size : int (optional, default=500)
             The number of samples per batch to load during the training, validation,
@@ -246,25 +248,34 @@ class CondXD(CondXDBase):
         # real size of training / validation / test set
         self.size_tra, self.size_val, self.size_tes = self._real_size(
             tra_val_tes_size, n_sample)
+        
+        # normalize the data and noise matrix
+        self.data_avg = torch.mean(sample, dim=0)
+        self.data_std = torch.std(sample, dim=0)
+        sample_n = (sample - self.data_avg) / self.data_std
+        noise_n = noise / torch.outer(self.data_std, self.data_std)
 
         # Define cond_tra, sample_tra, self.noise_tra
-        splits = self._split_data(cond, sample, noise)
+        splits = self._split_data(cond, sample_n, noise_n)
         cond_tra, sample_tra, noise_tra, \
         cond_val, sample_val, noise_val, \
         cond_tes, sample_tes, noise_tes = splits
 
         # Load data into batches
         self.dataloader_tra = DataLoader(
-                TensorDataset(cond_tra, sample_tra, noise_tra),
-                batch_size=self.batch_size, shuffle=True)
+            TensorDataset(cond_tra, sample_tra, noise_tra),
+            batch_size=self.batch_size, shuffle=True
+        )
 
         self.dataloader_val = DataLoader(
-                TensorDataset(cond_val, sample_val, noise_val),
-                batch_size=self.batch_size, shuffle=False)
+            TensorDataset(cond_val, sample_val, noise_val),
+            batch_size=self.batch_size, shuffle=False
+        )
 
         self.dataloader_tes = DataLoader(
-                TensorDataset(cond_tes, sample_tes, noise_tes),
-                batch_size=self.batch_size, shuffle=False)
+            TensorDataset(cond_tes, sample_tes, noise_tes),
+            batch_size=self.batch_size, shuffle=False
+        )
 
 
 
@@ -464,8 +475,10 @@ class CondXD(CondXDBase):
         total_loss = 0
         for cond_i, sample_i, noise_i in self.dataloader_tra:
             self.optimizer.zero_grad()
-            loss = self.loss(cond_i, sample_i, noise=noise_i, 
-                             regularization=True)
+            loss = self.loss(
+                cond_i, sample_i, noise=noise_i, 
+                regularization=True
+            )
             total_loss += loss.item() * cond_i.size(0)
             loss.backward()
             self.optimizer.step()
@@ -480,8 +493,10 @@ class CondXD(CondXDBase):
         total_loss = 0
         with torch.no_grad():  # No gradients needed
             for cond_i, data_i, noise_i in self.dataloader_val:
-                loss = self.loss(cond_i, data_i, noise=noise_i, 
-                                       regularization=True)
+                loss = self.loss(
+                    cond_i, data_i, noise=noise_i, 
+                    regularization=True
+                )
                 total_loss += loss.item() * cond_i.size(0)
         
         avg_loss = total_loss / self.size_val
@@ -567,15 +582,19 @@ class CondXD(CondXDBase):
         covars = covars[:, draw][torch.eye(batchsize).to(torch.bool)]
 
         if noise is None:
-            noise = torch.zeros_like(covars)
+            noise_n = torch.zeros_like(covars)
         elif noise.dim() != covars.dim():
-            noise = noise[:, None, ...]  # add noise to all components
+            noise_n = noise / torch.outer(self.data_std, self.data_std)
+            noise_n = noise_n[:, None, ...]  # add noise to all components
 
-        noisy_covars = covars + noise
+        noisy_covars = covars + noise_n
 
         noisy_covars = 0.5 * (noisy_covars + noisy_covars.transpose(-1, -2))
 
-        sample = mvn(loc=means, covariance_matrix=noisy_covars).sample()
+        sample_n = mvn(loc=means, covariance_matrix=noisy_covars).sample()
+
+        # scale the sample back to original data space
+        sample = sample_n * self.data_std + self.data_avg
 
         return sample
     
