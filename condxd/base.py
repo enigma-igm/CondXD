@@ -321,7 +321,7 @@ class CondXDBase(nn.Module):
         mixcoef, means, covars = self.forward(conditional)
 
         log_prob = self.log_prob_GMM(
-            sample_n, mixcoef, means, covars, noise=noise
+            sample_n, mixcoef, means, covars, noise=noise_n
         )
 
         return log_prob
