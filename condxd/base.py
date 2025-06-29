@@ -291,7 +291,7 @@ class CondXDBase(nn.Module):
 
         return log_prob_GMM
 
-    def log_prob_conditional(self, sample_n, conditional, noise=None):
+    def log_prob_conditional(self, sample_n, conditional, noise_n=None):
         """
         Compute the log likelihood of samples using a GMM predicted by CondXD, 
         which takes the conditionals of the samples as input.
@@ -306,9 +306,9 @@ class CondXDBase(nn.Module):
             The conditional input tensor used to generate GMM parameters via 
             CondXD, with shape (batch_size, conditional_dim).
         
-        noise : torch.Tensor (optional, default=None)
-            Gaussian noise covariance matrix of every sample, with shape 
-            (batch_size, sample_dim, sample_dim). If None, no noise is added.
+        noise_n : torch.Tensor (optional, default=None)
+            Normalized gaussian noise covariance matrix of every sample, with 
+            shape (batch_size, sample_dim, sample_dim). If None, no noise is added.
 
         Returns
         -------
