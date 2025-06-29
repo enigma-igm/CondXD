@@ -1,14 +1,16 @@
-import os
-import copy
-
-import numpy as np
-from astropy.io import fits
-
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from deprecate.model import GMMNet
 from diagnostics.plots_QSO import all_figures
+
+from astropy.io import fits
+import numpy as np
+
+import copy
+import os
+
+from IPython import embed
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
@@ -25,46 +27,45 @@ hyper_params = {
     "patience": 2,
     "num_epoch": 100,
     "weight_decay": 0.001,
-    "size_tra": 90,
-    "size_val": 10,
-    "size_tes": 0,
+    "size_tra": 70,
+    "size_val": 15,
+    "size_tes": 15,
     "num_Gauss": 20
 }
 
 #experiment.log_parameters(hyper_params)
 
 # read file
-# file = fits.open('data/VIKING_catalog_clean_nobright.fits')
-file = fits.open('data/VIKING_catalog_clean_nobright.fits')
+file = fits.open('data/VIKING_catalog.fits')
 data = copy.deepcopy(file[1].data)
 file.close()
 
 # load reference band and error
-f_J = data['J_flux_aper_3p0'].astype('float').reshape(-1, 1)
-f_J_err = data['J_flux_aper_err_3p0'].astype('float').reshape(-1, 1)
+f_J = data['f_J'].astype('float').reshape(-1, 1)
+f_J = data['f_J'].astype('float').reshape(-1, 1)
+f_J_err = data['f_J_err'].astype('float').reshape(-1, 1)
 # transform to tensor
 f_J = torch.Tensor(f_J)
 f_J_err = torch.Tensor(f_J_err)
 
 # load relative flux
-rf_z = data['flux_z'] / data['J_flux_aper_3p0']
-rf_Y = data['Y_flux_aper_3p0'] / data['J_flux_aper_3p0']
-rf_H = data['H_flux_aper_3p0'] / data['J_flux_aper_3p0']
-rf_Ks = data['K_flux_aper_3p0'] / data['J_flux_aper_3p0']
-rf_w1 = data['flux_w1'] / data['J_flux_aper_3p0']
-rf_w2 = data['flux_w2'] / data['J_flux_aper_3p0']
+rf_z = data['f_z'] / data['f_J']
+rf_Y = data['f_Y'] / data['f_J']
+rf_H = data['f_H'] / data['f_J']
+rf_Ks = data['f_Ks'] / data['f_J']
+rf_w1 = data['f_w1'] / data['f_J']
+rf_w2 = data['f_w2'] / data['f_J']
 data_set = torch.Tensor(np.array([rf_z, rf_Y, rf_H, rf_Ks, rf_w1, rf_w2]))
 data_set = data_set.transpose(1, 0)
 
 # load errors
-f_z_err = data['flux_z_err']
-f_Y_err = data['Y_flux_aper_err_3p0']
-f_H_err = data['H_flux_aper_err_3p0']
-f_Ks_err = data['K_flux_aper_err_3p0']
-f_w1_err = data['flux_w1_err']
-f_w2_err = data['flux_w2_err']
-err_set  = torch.Tensor(np.array([f_z_err, f_Y_err, f_H_err, f_Ks_err, 
-                                  f_w1_err, f_w2_err]))
+f_z_err = data['f_z_err']
+f_Y_err = data['f_Y_err']
+f_H_err = data['f_H_err']
+f_Ks_err = data['f_Ks_err']
+f_w1_err = data['f_w1_err']
+f_w2_err = data['f_w2_err']
+err_set  = torch.Tensor(np.array([f_z_err, f_Y_err, f_H_err, f_Ks_err, f_w1_err, f_w2_err]))
 err_set  = err_set.transpose(1, 0)
 
 del data
@@ -110,16 +111,10 @@ def get_noise_covar(len_data, D, f_J, f_J_err, data_set, err_set):
 
 err_r_set = get_noise_covar(len_data, D, f_J, f_J_err, data_set, err_set)
 
-# normalize data
-data_avg = torch.mean(data_set, dim=0)
-data_std = torch.std(data_set, dim=0)
-data_set = (data_set - data_avg) / data_std
-err_r_set = err_r_set / torch.outer(data_std, data_std)
 
-
-# convert flux to magnitude
-mag_J = 22.5 - 2.5*torch.log10(f_J)
-mag_J_err = 2.5/np.log(10) * f_J_err/f_J
+# log to prevent exploding
+f_J_err = f_J_err/f_J
+f_J = torch.log(f_J)
 
 
 # divide to training and validation set
@@ -142,21 +137,20 @@ id_sep = np.append(np.ones(size_tra), np.append(np.ones(size_val)*2, np.ones(siz
 np.random.seed()
 np.random.shuffle(id_sep)
 
-mag_J_tra, mag_J_err_tra = get_set(mag_J, mag_J_err, id_sep, 1)
-mag_J_val, mag_J_err_val = get_set(mag_J, mag_J_err, id_sep, 2)
-mag_J_tes, mag_J_err_tes = get_set(mag_J, mag_J_err, id_sep, 3)
+f_J_tra, f_J_err_tra = get_set(f_J, f_J_err, id_sep, 1)
+f_J_val, f_J_err_val = get_set(f_J, f_J_err, id_sep, 2)
+f_J_tes, f_J_err_tes = get_set(f_J, f_J_err, id_sep, 3)
 data_tra, err_r_tra = get_set(data_set, err_r_set, id_sep, 1)
 data_val, err_r_val = get_set(data_set, err_r_set, id_sep, 2)
 data_tes, err_r_tes = get_set(data_set, err_r_set, id_sep, 3)
 
-del err_set#data_set, err_set
+del data_set, err_set
 
 # put data into batches
 batch_size = hyper_params['batch_size']
-train_loader = DataLoader(TensorDataset(mag_J_tra, data_tra, err_r_tra), batch_size=batch_size, shuffle=True)
-valid_loader = DataLoader(TensorDataset(mag_J_val, data_val, err_r_val), batch_size=batch_size, shuffle=False)
-test_loader  = DataLoader(TensorDataset(mag_J_tes, data_tes, err_r_tes), batch_size=batch_size, shuffle=False)
-all_loader = DataLoader(TensorDataset(mag_J, data_set, err_r_set), batch_size=batch_size, shuffle=False)
+train_loader = DataLoader(TensorDataset(f_J_tra, data_tra, err_r_tra), batch_size=batch_size, shuffle=True)
+valid_loader = DataLoader(TensorDataset(f_J_val, data_val, err_r_val), batch_size=batch_size, shuffle=False)
+test_loader  = DataLoader(TensorDataset(f_J_tes, data_tes, err_r_tes), batch_size=batch_size, shuffle=False)
 
 
 
@@ -174,23 +168,18 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
 
 # training process
 # training loop
-# record the time of training
-import time
-start_time = time.time()
 epoch = hyper_params["num_epoch"]
 lowest_loss = 9999
 best_model  = copy.deepcopy(gmm)
-train_loss_list = np.ones(epoch) * np.nan
-valid_loss_list = np.ones(epoch) * np.nan
 for n in range(epoch):
     try:
         # training
         gmm.train()
         train_loss = 0
-        for i, (mag_J_i, data_i, err_r_i) in enumerate(train_loader):
-            size_batch_i = mag_J_i.shape[0]
+        for i, (f_J_i, data_i, err_r_i) in enumerate(train_loader):
+            size_batch_i = f_J_i.shape[0]
             optimizer.zero_grad()
-            loss = gmm.loss(data_i, mag_J_i, noise=err_r_i, regression=True)
+            log_prob_b, loss = gmm.score(data_i, f_J_i, noise=err_r_i, regression=True)
             train_loss += loss
             # backward and update parameters
             loss.backward()
@@ -201,21 +190,19 @@ for n in range(epoch):
         train_loss = train_loss / size_tra
         print('\nEpoch', (n+1), 'Training loss:', train_loss.item())
         scheduler.step(train_loss)
-        train_loss_list[n] = train_loss
 
         # validating
         gmm.eval()
         val_loss = 0
-        for i, (mag_J_i, data_i, err_r_i) in enumerate(valid_loader):
-            size_batch_i = mag_J_i.shape[0]
+        for i, (f_J_i, data_i, err_r_i) in enumerate(valid_loader):
+            size_batch_i = f_J_i.shape[0]
             optimizer.zero_grad()
-            loss = gmm.loss(data_i, mag_J_i, noise=err_r_i)
+            log_prob_b, loss = gmm.score(data_i, f_J_i, noise=err_r_i)
             val_loss += loss
 
             #experiment.log_metric('batch_val_loss', loss/size_batch_i, step=i)
         
         val_loss = val_loss / size_val
-        valid_loss_list[n] = val_loss
         print('Epoch', (n+1), 'Validation loss:', val_loss.item())
         if val_loss < lowest_loss:
             lowest_loss = val_loss
@@ -226,27 +213,13 @@ for n in range(epoch):
 
     except KeyboardInterrupt:
         break
-
-print('Training time:', time.time()-start_time)
-
-# plot the training and validation loss
-import matplotlib.pyplot as plt
-fig = plt.figure(figsize=(5, 3.7))
-plt.plot(train_loss_list, label='training loss', color='red')
-plt.plot(valid_loss_list, label='validation loss', color='red', linestyle='dashed')
-plt.legend(frameon=False)
-plt.xlabel('Training Epoch')
-plt.ylabel('Loss')
-plt.tight_layout()
-plt.savefig('figs/loss_QSO.png')
-plt.close()
    
-all_figures(K, D, all_loader, best_model, data_avg, data_std)
+#all_figures(K, D, test_loader, best_model)
 
 best_model.eval()
 tes_loss = 0
-for i, (mag_J_i, data_i, err_r_i) in enumerate(test_loader):
-    loss = best_model.loss(data_i, mag_J_i, noise=err_r_i)
+for i, (f_J_i, data_i, err_r_i) in enumerate(test_loader):
+    log_prob_b, loss = best_model.score(data_i, f_J_i, noise=err_r_i)
     tes_loss += loss
 
 tes_loss = tes_loss / size_tes

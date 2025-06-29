@@ -578,6 +578,8 @@ class CondXD(CondXDBase):
         """
     
         conditional = torch.Tensor(conditional)
+        noise = torch.Tensor(noise)
+        
         mixcoef, means, covars = self.forward(conditional)
         
         batchsize = conditional.shape[0]
