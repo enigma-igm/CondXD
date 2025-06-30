@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from condxd.CondXD import CondXD
-from data.experiment import data_load
+from paper.data.experiment import data_load
 from diagnostics.plots_exp import exp_figures
 
 
