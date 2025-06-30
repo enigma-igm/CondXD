@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from condxd.CondXD import CondXD
+from CondXD.model.CondXD import CondXD
 from paper.data.experiment import data_load
 from paper.diagnostics.plots_exp import exp_figures
 
