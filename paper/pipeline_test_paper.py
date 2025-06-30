@@ -4,9 +4,9 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 import numpy as np
 
-from paper.data.experiment import data_load
+from data.experiment import data_load
 from condxd.CondXD import CondXD
-from paper.diagnostics.plots_exp import exp_figures
+from diagnostics.plots_exp import exp_figures
 # export PYTHONPATH="${PYTHONPATH}:mypath/extreme-deconvolution/py"
 # to install extreme-deconvolution: run `export LIBRARY_PATH=/usr/local/Cellar/gsl/2.7.1/lib/` 
 # in the terminal before `make`

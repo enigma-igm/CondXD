@@ -7,8 +7,8 @@ from astropy.io import fits
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from paper.model import GMMNet
-from paper.diagnostics.plots_QSO import all_figures
+from model import GMMNet
+from diagnostics.plots_QSO import all_figures
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 

@@ -2,8 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from deprecate.model import mvn
-
 
 # training and validation loss
 def loss_in_process(train_loss_list, valid_loss_list, fig_path):

@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from paper.data.experiment import data_load
-from paper.model import GMMNet
+from data.experiment import data_load
+from model import GMMNet
 from diagnostics.plots_exp import exp_figures
 
 # to install extreme-deconvolution: run `export LIBRARY_PATH=/usr/local/Cellar/gsl/2.7.1/lib/` 
