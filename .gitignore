@@ -148,13 +148,13 @@ dmypy.json
 *.npy
 *.pdf
 output/
-data/
 *.cat
 *.pkl
 
 ignore/
 data/bin_edges_stars.fits
 data/UKIDSS_catalog_z7_training_subsample_clean.fits
+data/VIKING_catalog_clean_nobright.fits
 data/VIKING_catalog.fits
 
 CondXD.egg-info
