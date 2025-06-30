@@ -2,8 +2,8 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from data.toy import *
-from deprecate.model import *
-from diagnostics.toy import *
+from paper.model import *
+from paper.diagnostics.toy import *
 
 import seaborn as sns
 
