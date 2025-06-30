@@ -1,5 +1,6 @@
 import os
 import copy
+import pickle
 
 import numpy as np
 
@@ -37,10 +38,6 @@ class CondXD(CondXDBase):
 
     conditional_dim : int
         The dimensionality of the conditional data.
-
-    output_path : str (optional, default=None)
-        The path where the CondXD model is to be saved.
-        If not provided, the model is not saved by default.
 
     Attributes
     ----------
@@ -81,6 +78,9 @@ class CondXD(CondXDBase):
         The actual sizes of the training, validation, and test datasets,
         calculated from the `tra_val_tes_size` input and the total number of samples.
         Only available after running the method load_data(cond, sample, noise...).
+
+    data_avg, data_std : torch.Tensor
+        The average and standard deviation of the sample data, used for normalization.
     
     batch_size : int
         The number of samples per batch to load during the training, validation,
@@ -90,7 +90,7 @@ class CondXD(CondXDBase):
 
     Methods
     -------
-    load_data(cond, sample, noise, tra_val_tes_size=(70, 15, 15), batch_size=500)
+    load_data(cond, sample, noise, tra_val_tes_size=(81, 9, 10), batch_size=500)
         Loads and preprocesses the data, splits it into training, validation,
         and testing sets, and prepares DataLoaders for training and evaluation.
         See details in this method.
@@ -105,7 +105,7 @@ class CondXD(CondXDBase):
 
     deconvolve(num_epoch=None)
         Trains the model for a specified number of epochs, evaluates it on
-        the validation set, and saves the best performing model.
+        the validation set, and keeps the best performing NN weights.
 
     sample(conditional, n_per_conditional=1, noise=None):
         Draws samples from GMM predicted by CondXD inputing conditional.
@@ -129,19 +129,21 @@ class CondXD(CondXDBase):
     >>> condxd.load_data(cond_data, sample_data, noise_data)
     >>> condxd.deconvolve()
     >>> samples = condxd.sample(cond_data, n_per_conditional=50)
-    >>> condxd.save(filename='condxd_model.pkl')
+    >>> condxd.save_NN(filename='condxd_weights.pkl')
 
     If you want to load a trained model and sample from it:
     >>> condxd = CondXD(n_Gaussians=3, sample_dim=2, conditional_dim=2)
-    >>> condxd.load('condxd_model.pkl')
+    >>> condxd.load('condxd_weights.pkl')
     >>> samples = condxd.sample(cond_data, n_per_conditional=50)
     """
 
 
-    def __init__(self,
-                 n_Gaussians,
-                 sample_dim,
-                 conditional_dim):
+    def __init__(
+            self,
+            n_Gaussians,
+            sample_dim,
+            conditional_dim
+        ):
 
         super(CondXD, self).__init__(n_Gaussians, sample_dim, conditional_dim)
             
@@ -169,7 +171,7 @@ class CondXD(CondXDBase):
             **self.scheduler_params
         )
 
-    def load_data(self, cond, sample, noise=None, tra_val_tes_size=(70, 15, 15),
+    def load_data(self, cond, sample, noise=None, tra_val_tes_size=(81, 9, 10),
                 batch_size=500):
         """
         Loads preprocessed data, then splits it into training, validation,
@@ -198,15 +200,15 @@ class CondXD(CondXDBase):
             also be provided to `noise'.
             
         noise : array-like (optional, default=None)
-            The noise covariance matrix  associated with each sample. Shape 
+            The noise covariance matrix associated with each sample. Shape 
             should be (n_samples, sample_dim, sample_dim) to match the dimensions
             of the sample data.
             
-        tra_val_tes_size : tuple of int (optional, default=(70, 15, 15))
+        tra_val_tes_size : tuple of int (optional, default=(81, 9, 10))
             The proportions of the dataset to be allocated to the training,
             validation, and testing sets, respectively. Values are not required
-            to sum to any specific number such as 100. The relative size is 
-            when computing the real set size.
+            to sum to any specific number such as 100. The relative size is
+            used when computing the real set size.
             
         batch_size : int (optional, default=500)
             The number of samples per batch to load during the training, validation,
@@ -250,25 +252,34 @@ class CondXD(CondXDBase):
         # real size of training / validation / test set
         self.size_tra, self.size_val, self.size_tes = self._real_size(
             tra_val_tes_size, n_sample)
+        
+        # normalize the data and noise matrix
+        self.data_avg = torch.mean(sample, dim=0)
+        self.data_std = torch.std(sample, dim=0)
+        sample_n = (sample - self.data_avg) / self.data_std
+        noise_n = noise / torch.outer(self.data_std, self.data_std)
 
         # Define cond_tra, sample_tra, self.noise_tra
-        splits = self._split_data(cond, sample, noise)
+        splits = self._split_data(cond, sample_n, noise_n)
         cond_tra, sample_tra, noise_tra, \
         cond_val, sample_val, noise_val, \
         cond_tes, sample_tes, noise_tes = splits
 
         # Load data into batches
         self.dataloader_tra = DataLoader(
-                TensorDataset(cond_tra, sample_tra, noise_tra),
-                batch_size=self.batch_size, shuffle=True)
+            TensorDataset(cond_tra, sample_tra, noise_tra),
+            batch_size=self.batch_size, shuffle=True
+        )
 
         self.dataloader_val = DataLoader(
-                TensorDataset(cond_val, sample_val, noise_val),
-                batch_size=self.batch_size, shuffle=False)
+            TensorDataset(cond_val, sample_val, noise_val),
+            batch_size=self.batch_size, shuffle=False
+        )
 
         self.dataloader_tes = DataLoader(
-                TensorDataset(cond_tes, sample_tes, noise_tes),
-                batch_size=self.batch_size, shuffle=False)
+            TensorDataset(cond_tes, sample_tes, noise_tes),
+            batch_size=self.batch_size, shuffle=False
+        )
 
 
 
@@ -402,13 +413,13 @@ class CondXD(CondXDBase):
 
     def deconvolve(self, num_epoch=100):
         """
-        Trains the model for a specified number of epochs. During each epoch, the
-        method performs training on the training dataset and evaluates the model on
-        the validation dataset. It also tracks and prints the training and validation
-        loss for each epoch. The best model, determined by the lowest validation loss,
-        is saved if an output path is provided. After training, if a test set is 
-        provided the method evaluates the model on the test dataset and prints the 
-        final test loss.
+        Trains the model for a specified number of epochs. During each epoch, 
+        the method performs training on the training dataset and evaluates the
+        model on the validation dataset. It also tracks and prints the training
+        and validation loss for each epoch. The best model, determined by the
+        lowest validation loss, is kept. After training, if a test set is 
+        provided the method evaluates the model on the test dataset and prints 
+        the final test loss.
 
         Parameters
         ----------
@@ -449,7 +460,7 @@ class CondXD(CondXDBase):
             train_loss = self._train_epoch(epoch)
             val_loss = self._validate_epoch(epoch)
             print(f"Epoch {epoch}, training loss: {train_loss:.5f}, "
-                  "validation loss: {val_loss:.5f}.")
+                  f"validation loss: {val_loss:.5f}.")
 
             # Update best model if validation loss is improved
             if val_loss < lowest_loss:
@@ -468,8 +479,10 @@ class CondXD(CondXDBase):
         total_loss = 0
         for cond_i, sample_i, noise_i in self.dataloader_tra:
             self.optimizer.zero_grad()
-            loss = self.loss(cond_i, sample_i, noise=noise_i, 
-                             regularization=True)
+            loss = self.loss(
+                cond_i, sample_i, noise_n=noise_i, 
+                regularization=True
+            )
             total_loss += loss.item() * cond_i.size(0)
             loss.backward()
             self.optimizer.step()
@@ -484,8 +497,10 @@ class CondXD(CondXDBase):
         total_loss = 0
         with torch.no_grad():  # No gradients needed
             for cond_i, data_i, noise_i in self.dataloader_val:
-                loss = self.loss(cond_i, data_i, noise=noise_i, 
-                                       regularization=True)
+                loss = self.loss(
+                    cond_i, data_i, noise_n=noise_i, 
+                    regularization=True
+                )
                 total_loss += loss.item() * cond_i.size(0)
         
         avg_loss = total_loss / self.size_val
@@ -516,7 +531,7 @@ class CondXD(CondXDBase):
 
         with torch.no_grad():  # No gradients needed
             for cond_i, data_i, noise_i in testloader:
-                loss = self.loss(cond_i, data_i, noise=noise_i, 
+                loss = self.loss(cond_i, data_i, noise_n=noise_i, 
                                        regularization=True)
                 total_loss += loss.item() * cond_i.size(0)
         
@@ -563,7 +578,8 @@ class CondXD(CondXDBase):
         """
     
         conditional = torch.Tensor(conditional)
-        noise = torch.Tensor(noise)
+        if noise is not None:
+            noise = torch.Tensor(noise)
         
         mixcoef, means, covars = self.forward(conditional)
         
@@ -573,38 +589,58 @@ class CondXD(CondXDBase):
         covars = covars[:, draw][torch.eye(batchsize).to(torch.bool)]
 
         if noise is None:
-            noise = torch.zeros_like(covars)
+            noise_n = torch.zeros_like(covars)
         elif noise.dim() != covars.dim():
-            noise = noise[:, None, ...]  # add noise to all components
+            noise_n = noise[:, None, ...]  # add noise to all components
 
-        noisy_covars = covars + noise
+        noise_n = noise_n / torch.outer(self.data_std, self.data_std)
+
+        noisy_covars = covars + noise_n
 
         noisy_covars = 0.5 * (noisy_covars + noisy_covars.transpose(-1, -2))
 
-        sample = mvn(loc=means, covariance_matrix=noisy_covars).sample()
+        sample_n = mvn(loc=means, covariance_matrix=noisy_covars).sample()
+
+        # scale the sample back to original data space
+        sample = sample_n * self.data_std + self.data_avg
 
         return sample
     
-    def save(self, filename=None):
-        """Save the model to a file.
+    def save_NN(self, filename=None):
+        """Save the NN architecture weights to a file.
 
         Parameters
         ----------
         filename : str
-            The name of the file to save the model as (including path).
+            The name of the file to save the NN weights as (including path).
         """
         if filename is None:
-            filename = 'CondXD_params.pkl'
+            filename = 'CondXD_weights.pkl'
 
         torch.save(self.state_dict(), filename)
     
-    def load(self, filename):
-        """Load the model from a file.
+    def load_NN(self, filename):
+        """Load the NN architecture weights from a file.
 
         Parameters
         ----------
         filename : str
-            The name of the file to load the model from.
+            The name of the file to load the NN weights from.
         """
         self.load_state_dict(torch.load(filename))
         self.eval()
+
+
+    def save(self, filename=None):
+        """Save the entire CondXD model to a file using pickle.
+
+        Parameters
+        ----------
+        filename : str, optional
+            The name of the file to save the model as (including path).
+            If None, defaults to 'CondXD_full_model.pkl'.
+        """
+        if filename is None:
+            filename = 'CondXD_full_model.pkl'
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
