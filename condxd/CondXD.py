@@ -460,7 +460,7 @@ class CondXD(CondXDBase):
             train_loss = self._train_epoch(epoch)
             val_loss = self._validate_epoch(epoch)
             print(f"Epoch {epoch}, training loss: {train_loss:.5f}, "
-                  "validation loss: {val_loss:.5f}.")
+                  f"validation loss: {val_loss:.5f}.")
 
             # Update best model if validation loss is improved
             if val_loss < lowest_loss:
@@ -480,7 +480,7 @@ class CondXD(CondXDBase):
         for cond_i, sample_i, noise_i in self.dataloader_tra:
             self.optimizer.zero_grad()
             loss = self.loss(
-                cond_i, sample_i, noise=noise_i, 
+                cond_i, sample_i, noise_n=noise_i, 
                 regularization=True
             )
             total_loss += loss.item() * cond_i.size(0)
@@ -498,7 +498,7 @@ class CondXD(CondXDBase):
         with torch.no_grad():  # No gradients needed
             for cond_i, data_i, noise_i in self.dataloader_val:
                 loss = self.loss(
-                    cond_i, data_i, noise=noise_i, 
+                    cond_i, data_i, noise_n=noise_i, 
                     regularization=True
                 )
                 total_loss += loss.item() * cond_i.size(0)
@@ -531,7 +531,7 @@ class CondXD(CondXDBase):
 
         with torch.no_grad():  # No gradients needed
             for cond_i, data_i, noise_i in testloader:
-                loss = self.loss(cond_i, data_i, noise=noise_i, 
+                loss = self.loss(cond_i, data_i, noise_n=noise_i, 
                                        regularization=True)
                 total_loss += loss.item() * cond_i.size(0)
         
@@ -578,7 +578,8 @@ class CondXD(CondXDBase):
         """
     
         conditional = torch.Tensor(conditional)
-        noise = torch.Tensor(noise)
+        if noise is not None:
+            noise = torch.Tensor(noise)
         
         mixcoef, means, covars = self.forward(conditional)
         
@@ -590,8 +591,9 @@ class CondXD(CondXDBase):
         if noise is None:
             noise_n = torch.zeros_like(covars)
         elif noise.dim() != covars.dim():
-            noise_n = noise / torch.outer(self.data_std, self.data_std)
-            noise_n = noise_n[:, None, ...]  # add noise to all components
+            noise_n = noise[:, None, ...]  # add noise to all components
+
+        noise_n = noise_n / torch.outer(self.data_std, self.data_std)
 
         noisy_covars = covars + noise_n
 
